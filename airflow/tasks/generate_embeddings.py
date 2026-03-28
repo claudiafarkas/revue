@@ -1,0 +1,1 @@
+"""Placeholder task: generate embeddings for job postings and resume content."""

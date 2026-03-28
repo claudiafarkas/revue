@@ -1,0 +1,1 @@
+"""Placeholder task: normalize and clean extracted text."""

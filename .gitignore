@@ -2,3 +2,9 @@ node_modules
 dist
 .npm-cache
 *.tsbuildinfo
+__pycache__
+.pytest_cache
+.DS_Store
+.env
+.venv
+.next

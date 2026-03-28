@@ -1,0 +1,1 @@
+"""Service placeholder for triggering the Airflow DAG."""

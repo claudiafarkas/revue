@@ -1,0 +1,1 @@
+export { ResumeUploadPage as ResumeUpload } from './ResumeUploadPage';

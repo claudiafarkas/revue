@@ -1,0 +1,1 @@
+"""Placeholder task: compare resume features against role requirements."""

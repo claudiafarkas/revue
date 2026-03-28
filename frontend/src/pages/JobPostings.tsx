@@ -1,0 +1,1 @@
+export { JobPostingsPage as JobPostings } from './JobPostingsPage';

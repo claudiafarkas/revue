@@ -1,0 +1,1 @@
+"""Service placeholder for parsing raw job posting content."""

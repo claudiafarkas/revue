@@ -1,0 +1,1 @@
+"""Placeholder task: extract structured resume features."""

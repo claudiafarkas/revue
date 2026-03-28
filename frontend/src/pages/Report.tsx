@@ -1,0 +1,1 @@
+export { ReportPage as Report } from './ReportPage';

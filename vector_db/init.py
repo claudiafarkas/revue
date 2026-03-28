@@ -1,0 +1,1 @@
+"""Placeholder module for vector database initialization."""

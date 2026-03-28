@@ -1,0 +1,1 @@
+"""Placeholder helpers for embeddings generation and persistence."""
