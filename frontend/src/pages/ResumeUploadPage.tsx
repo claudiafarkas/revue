@@ -56,7 +56,7 @@ export function ResumeUploadPage() {
 
   return (
     <StepShell
-      stepIndex={2}
+      stepIndex={1}
       eyebrow="Step 2"
       title="Upload your resume"
       description="Bring in the latest PDF version of your resume. Once uploaded, the backend will eventually store the file and trigger the analysis pipeline."
@@ -109,8 +109,21 @@ export function ResumeUploadPage() {
             )}
             {error ? <p className="field-group__message field-group__message--error">{error}</p> : null}
           </div>
+        </section>
 
-          <div className="form-actions form-actions--split">
+        <section className="document-preview">
+          <p className="eyebrow">On-page Preview</p>
+          <div className="document-preview__stage">
+            {previewUrl ? (
+              <iframe title="Resume preview" src={previewUrl} className="document-preview__frame" />
+            ) : (
+              <div className="document-preview__empty">
+                <p>Your resume preview will appear here after upload.</p>
+              </div>
+            )}
+          </div>
+
+          <div className="form-actions form-actions--preview">
             <Link href="/postings" className="button button--ghost">
               Back
             </Link>
@@ -123,17 +136,6 @@ export function ResumeUploadPage() {
               Generate My Revue Report
             </button>
           </div>
-        </section>
-
-        <section className="document-preview">
-          <p className="eyebrow">On-page Preview</p>
-          {previewUrl ? (
-            <iframe title="Resume preview" src={previewUrl} className="document-preview__frame" />
-          ) : (
-            <div className="document-preview__empty">
-              <p>Your resume preview will appear here after upload.</p>
-            </div>
-          )}
         </section>
       </div>
     </StepShell>

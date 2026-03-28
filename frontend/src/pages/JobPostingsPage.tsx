@@ -43,7 +43,7 @@ export function JobPostingsPage() {
 
   return (
     <StepShell
-      stepIndex={1}
+      stepIndex={0}
       eyebrow="Step 1"
       title="Collect the job postings"
       description="Paste three role descriptions or URLs. Revue will use them later to identify repeated requirements and themes."

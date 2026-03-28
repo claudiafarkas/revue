@@ -7,6 +7,7 @@ type StepShellProps = PropsWithChildren<{
   title: string;
   description: string;
   aside?: ReactNode;
+  className?: string;
 }>;
 
 export function StepShell({
@@ -15,10 +16,11 @@ export function StepShell({
   title,
   description,
   aside,
+  className,
   children,
 }: StepShellProps) {
   return (
-    <section className="step-layout">
+    <section className={className ? `step-layout ${className}` : 'step-layout'}>
       <div className="step-layout__main">
         <div className="page-heading">
           <p className="eyebrow">{eyebrow}</p>

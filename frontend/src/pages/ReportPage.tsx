@@ -31,8 +31,9 @@ const reportSections = [
 export function ReportPage() {
   return (
     <StepShell
-      stepIndex={3}
-      eyebrow="Step 4"
+      className="step-layout--report"
+      stepIndex={2}
+      eyebrow="Step 3"
       title="Your Revue Report"
       description="This page previews the final report structure and tone. The backend will eventually serve a generated PDF and store it in cloud storage."
       aside={
@@ -43,8 +44,11 @@ export function ReportPage() {
       }
     >
       <div className="report-toolbar">
-        <button type="button" className="button button--primary" onClick={() => window.print()}>
-          Download PDF
+        <button type="button" className="button button--primary report-toolbar__download" onClick={() => window.print()}>
+          <span className="report-toolbar__icon" aria-hidden="true">
+            ↓
+          </span>
+          <span>Download PDF</span>
         </button>
         <p>Prototype behavior: this currently opens the browser print dialog so the UI can be reviewed without backend generation.</p>
       </div>
@@ -59,7 +63,7 @@ export function ReportPage() {
         ))}
       </div>
 
-      <div className="form-actions form-actions--split">
+      <div className="form-actions form-actions--report">
         <Link href="/processing" className="button button--ghost">
           Back
         </Link>

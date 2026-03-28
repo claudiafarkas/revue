@@ -37,7 +37,7 @@ export function HomePage() {
     <div className="home-stack">
       <section className="hero-panel">
         <div className="hero-panel__copy">
-          <p className="eyebrow">Career Review System</p>
+          <h2 className="hero-panel__brand">Revue.ai</h2>
           <h1>Your Career, Thoughtfully Reviewed.</h1>
           <p className="lede">
             Revue.ai turns scattered job descriptions and one resume into a calm,
@@ -55,7 +55,7 @@ export function HomePage() {
         </div>
 
         <div className="hero-panel__feature-card">
-          <p className="eyebrow">Editorial Snapshot</p>
+          <p className="eyebrow" style={{ marginBottom: '10px' }}>Editorial Snapshot</p>
           <div className="feature-card__row">
             <span>Common requirements</span>
             <strong>Communication, systems thinking, product intuition</strong>
@@ -85,7 +85,7 @@ export function HomePage() {
       <section className="magazine-grid" id="how-it-works">
         <div className="section-intro">
           <p className="eyebrow">How It Works</p>
-          <h2>A measured, four-page flow</h2>
+          <h2>A measured, three-page flow</h2>
         </div>
         <div className="card-grid card-grid--three">
           {workflow.map((item, index) => (

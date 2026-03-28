@@ -12,22 +12,17 @@ type ProgressRailProps = {
 
 const steps: ProgressStep[] = [
   {
-    label: '01. Introduce the workflow',
-    detail: 'See the process, value, and tone before you begin.',
-    href: '/',
-  },
-  {
-    label: '02. Add role signals',
+    label: '01. Add role signals',
     detail: 'Collect job postings so the report can compare common requirements.',
     href: '/postings',
   },
   {
-    label: '03. Upload resume',
+    label: '02. Upload resume',
     detail: 'Bring in your current story before the analysis starts.',
     href: '/resume',
   },
   {
-    label: '04. Review the report',
+    label: '03. Review the report',
     detail: 'Read the editorial summary, gaps, and interview preparation cues.',
     href: '/report',
   },
