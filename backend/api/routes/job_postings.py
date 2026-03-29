@@ -2,9 +2,10 @@
 
 from uuid import uuid4
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, HTTPException, status
 
 from api.schemas.job_postings import JobPostingsSubmissionRequest, JobPostingsSubmissionResponse
+from api.services.database import save_job_postings
 
 router = APIRouter(prefix="/job-postings", tags=["job-postings"])
 
@@ -13,10 +14,20 @@ router = APIRouter(prefix="/job-postings", tags=["job-postings"])
 def create_job_postings(
 	payload: JobPostingsSubmissionRequest,
 ) -> JobPostingsSubmissionResponse:
-	"""Accept job postings and return a placeholder tracking identifier."""
+	"""Accept job postings and persist them with a tracking identifier."""
+	job_id = f"revue-{uuid4().hex[:12]}"
+
+	try:
+		save_job_postings(job_id=job_id, postings=payload.postings)
+	except Exception as exc:
+		raise HTTPException(
+			status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+			detail="Unable to store job postings in PostgreSQL.",
+		) from exc
+
 	return JobPostingsSubmissionResponse(
-		job_id=f"revue-{uuid4().hex[:12]}",
+		job_id=job_id,
 		posting_count=len(payload.postings),
 		status="awaiting_resume",
-		detail="Job postings accepted. Persistence will be wired into FastAPI services next.",
+		detail="Job postings accepted and stored.",
 	)

@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.routes.job_postings import router as job_postings_router
 from api.routes.report import router as report_router
 from api.routes.resume import router as resume_router
+from api.services.database import initialize_database
 
 
 def create_app() -> FastAPI:
@@ -55,6 +56,11 @@ def create_app() -> FastAPI:
     app.include_router(job_postings_router, prefix="/api")
     app.include_router(resume_router, prefix="/api")
     app.include_router(report_router, prefix="/api")
+
+    @app.on_event("startup")
+    def setup_database() -> None:
+        """Ensure local PostgreSQL tables exist before serving requests."""
+        initialize_database()
 
     return app
 
