@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any
 
 import psycopg
 
 from api.services.migrations import run_migrations
+
+logger = logging.getLogger(__name__)
 
 
 def connection_string(mask_password: bool = False) -> str:
@@ -29,11 +32,14 @@ def connection_string(mask_password: bool = False) -> str:
 
 def initialize_database() -> None:
     """Apply SQL migrations to ensure required tables exist."""
+    logger.info("Running database migrations")
     run_migrations(connection_string())
+    logger.info("Database migrations finished")
 
 
 def save_job_postings(job_id: str, postings: list[str]) -> None:
     """Persist a batch of postings under a generated job identifier."""
+    logger.info("Saving job postings: job_id=%s posting_count=%d", job_id, len(postings))
     with psycopg.connect(connection_string()) as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -66,6 +72,7 @@ def save_job_postings(job_id: str, postings: list[str]) -> None:
                 """,
                 (job_id,),
             )
+    logger.info("Saved job postings: job_id=%s", job_id)
 
 
 def save_resume(job_id: str, filename: str, content_type: str | None, file_data: bytes) -> bool:
@@ -73,10 +80,12 @@ def save_resume(job_id: str, filename: str, content_type: str | None, file_data:
 
     Returns False when the job_id does not exist yet.
     """
+    logger.info("Saving resume: job_id=%s filename=%s byte_count=%d", job_id, filename, len(file_data))
     with psycopg.connect(connection_string()) as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT 1 FROM job_batches WHERE job_id = %s;", (job_id,))
             if cur.fetchone() is None:
+                logger.warning("Cannot save resume for unknown job_id: job_id=%s", job_id)
                 return False
 
             cur.execute(
@@ -105,6 +114,7 @@ def save_resume(job_id: str, filename: str, content_type: str | None, file_data:
                 (job_id,),
             )
 
+    logger.info("Saved resume and queued processing: job_id=%s", job_id)
     return True
 
 
@@ -132,6 +142,7 @@ def get_job_snapshot(job_id: str) -> dict[str, Any] | None:
 
 def get_report_snapshot(job_id: str) -> dict[str, Any] | None:
     """Return report-tracking fields for a job id."""
+    logger.info("Loading report snapshot: job_id=%s", job_id)
     with psycopg.connect(connection_string()) as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -145,11 +156,46 @@ def get_report_snapshot(job_id: str) -> dict[str, Any] | None:
             row = cur.fetchone()
 
     if row is None:
+        logger.info("No report snapshot found: job_id=%s", job_id)
         return None
 
+    logger.info("Loaded report snapshot: job_id=%s status=%s stage=%s has_report=%s", job_id, row[0], row[1], bool(row[3]))
     return {
         "status": row[0],
         "stage": row[1],
         "generated_at": row[2],
         "report_available": bool(row[3]),
+    }
+
+
+def get_report_content(job_id: str) -> dict[str, Any] | None:
+    """Return full persisted report payload for a job id."""
+    logger.info("Loading full report content: job_id=%s", job_id)
+    with psycopg.connect(connection_string()) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT status, stage, report_json
+                FROM reports
+                WHERE job_id = %s;
+                """,
+                (job_id,),
+            )
+            row = cur.fetchone()
+
+    if row is None:
+        logger.info("No full report content found: job_id=%s", job_id)
+        return None
+
+    logger.info(
+        "Loaded full report content: job_id=%s status=%s stage=%s has_report=%s",
+        job_id,
+        row[0],
+        row[1],
+        bool(row[2]),
+    )
+    return {
+        "status": row[0],
+        "stage": row[1],
+        "report_json": row[2],
     }

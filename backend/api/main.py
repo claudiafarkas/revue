@@ -1,5 +1,7 @@
 """FastAPI application entry point for the Revue.ai backend."""
 
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -7,6 +9,12 @@ from api.routes.job_postings import router as job_postings_router
 from api.routes.report import router as report_router
 from api.routes.resume import router as resume_router
 from api.services.database import initialize_database
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 
 def create_app() -> FastAPI:
@@ -60,7 +68,9 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     def setup_database() -> None:
         """Ensure local PostgreSQL tables exist before serving requests."""
+        logger.info("Applying database migrations at startup")
         initialize_database()
+        logger.info("Database migrations complete")
 
     return app
 

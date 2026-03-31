@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 import os
 
 import psycopg
+
+logger = logging.getLogger(__name__)
 
 
 def _connection_string() -> str:
@@ -31,6 +34,7 @@ def update_report_stage(job_id: str, stage: str, status: str = "processing") -> 
     if not isinstance(status, str) or not status:
         raise TypeError("status must be a non-empty string")
 
+    logger.info("Updating report stage: job_id=%s stage=%s status=%s", job_id, stage, status)
     with psycopg.connect(_connection_string()) as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -45,3 +49,4 @@ def update_report_stage(job_id: str, stage: str, status: str = "processing") -> 
                 """,
                 (job_id, status, stage),
             )
+    logger.info("Updated report stage successfully: job_id=%s stage=%s status=%s", job_id, stage, status)

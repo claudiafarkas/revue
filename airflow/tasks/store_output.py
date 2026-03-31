@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any
 
 import psycopg
+
+logger = logging.getLogger(__name__)
 
 
 def _connection_string(mask_password: bool = False) -> str:
@@ -32,6 +35,7 @@ def save_report_output(job_id: str, report_json: dict[str, Any]) -> None:
 	if not isinstance(report_json, dict):
 		raise TypeError("report_json must be a dict")
 
+	logger.info("Saving report output: job_id=%s report_keys=%s", job_id, sorted(report_json.keys()))
 	with psycopg.connect(_connection_string()) as conn:
 		with conn.cursor() as cur:
 			cur.execute(
@@ -48,6 +52,7 @@ def save_report_output(job_id: str, report_json: dict[str, Any]) -> None:
 				""",
 				(job_id, psycopg.types.json.Jsonb(report_json)),
 			)
+	logger.info("Saved report output and marked completed: job_id=%s", job_id)
 
 
 def store_output_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -64,4 +69,5 @@ def store_output_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
 	updated_payload = dict(payload)
 	updated_payload["status"] = "completed"
 	updated_payload["stage"] = "report_ready"
+	logger.info("store_output_from_payload finished: job_id=%s status=%s stage=%s", job_id, updated_payload["status"], updated_payload["stage"])
 	return updated_payload

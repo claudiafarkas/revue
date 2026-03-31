@@ -2,7 +2,126 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
+
+logger = logging.getLogger(__name__)
+
+_GENERIC_POSTING_TERMS = {
+	"across",
+	"advantage",
+	"analytics",
+	"apply",
+	"are",
+	"based",
+	"across",
+	"analytics",
+	"apply",
+	"better",
+	"build",
+	"business",
+	"can",
+	"complex",
+	"culture",
+	"data",
+	"driven",
+	"engineer",
+	"experience",
+	"full",
+	"how",
+	"insights",
+	"into",
+	"join",
+	"jobs",
+	"like",
+	"locations",
+	"need",
+	"needs",
+	"not",
+	"our",
+	"posted",
+	"problem",
+	"problems",
+	"product",
+	"ready",
+	"role",
+	"software",
+	"stakeholders",
+	"systems",
+	"team",
+	"teams",
+	"through",
+	"time",
+	"understand",
+	"using",
+	"what",
+	"work",
+	"world",
+}
+
+_TOOL_KEYWORDS = {
+	"airflow",
+	"api",
+	"apis",
+	"aws",
+	"azure",
+	"bigquery",
+	"ci/cd",
+	"docker",
+	"etl",
+	"fastapi",
+	"gcp",
+	"github",
+	"gitlab",
+	"java",
+	"jira",
+	"kafka",
+	"kubernetes",
+	"looker",
+	"mysql",
+	"nextjs",
+	"node",
+	"postgres",
+	"postgresql",
+	"python",
+	"react",
+	"redis",
+	"snowflake",
+	"spark",
+	"sql",
+	"tableau",
+	"terraform",
+	"typescript",
+	"warehouse",
+}
+
+
+def _filter_report_keywords(keywords: list[str]) -> list[str]:
+	"""Remove generic language so report sections use only meaningful keywords."""
+	seen: set[str] = set()
+	filtered: list[str] = []
+	for keyword in keywords:
+		cleaned = keyword.strip().lower()
+		if not cleaned or cleaned in seen or cleaned in _GENERIC_POSTING_TERMS:
+			continue
+		if len(cleaned) <= 2:
+			continue
+		seen.add(cleaned)
+		filtered.append(cleaned)
+	return filtered
+
+
+def _select_common_tools(posting_keywords: list[str], matched_keywords: list[str]) -> list[str]:
+	"""Favor technical or tool-like terms over generic recruiting language."""
+	candidates = _filter_report_keywords(posting_keywords + [keyword for keyword in matched_keywords if keyword not in posting_keywords])
+	preferred = [keyword for keyword in candidates if keyword in _TOOL_KEYWORDS or any(char in keyword for char in ("/", "+", ".", "#", "-"))]
+	ordered = preferred if preferred else candidates
+	return ordered[:12]
+
+
+def _select_common_achievements(missing_keywords: list[str]) -> list[str]:
+	"""Return filtered achievement and emphasis gaps without filler words."""
+	return _filter_report_keywords(missing_keywords)[:12]
 
 
 def _build_recommendations(missing_keywords: list[str]) -> list[str]:
@@ -40,7 +159,19 @@ def build_report_json(payload: dict[str, Any]) -> dict[str, Any]:
 	match_score = float(comparison.get("match_score", 0.0))
 	matched_keywords = list(comparison.get("matched_keywords", []))
 	missing_keywords = list(comparison.get("missing_keywords", []))
+	resume_keywords = list(comparison.get("resume_keywords", []))
+	posting_keywords = list(comparison.get("posting_keywords", []))
+	common_tools = _select_common_tools(posting_keywords, matched_keywords)
+	common_achievements = _select_common_achievements(missing_keywords)
 	average_similarity = float(embedding_features.get("average_similarity", 0.0))
+	logger.info(
+		"Building report JSON: job_id=%s match_score=%s matched=%d missing=%d embedding_similarity=%s",
+		job_id,
+		match_score,
+		len(matched_keywords),
+		len(missing_keywords),
+		average_similarity,
+	)
 
 	report_json = {
 		"job_id": job_id,
@@ -50,8 +181,12 @@ def build_report_json(payload: dict[str, Any]) -> dict[str, Any]:
 			"fit_label": "strong" if match_score >= 0.65 else "moderate" if match_score >= 0.4 else "emerging",
 		},
 		"highlights": {
+			"common_tools": common_tools,
+			"common_achievements": common_achievements,
 			"matched_keywords": matched_keywords[:15],
 			"missing_keywords": missing_keywords[:15],
+			"resume_keywords": resume_keywords[:15],
+			"posting_keywords": posting_keywords[:15],
 			"detected_contact_fields": {
 				"emails": resume_features.get("emails", []),
 				"phones": resume_features.get("phones", []),
@@ -61,11 +196,14 @@ def build_report_json(payload: dict[str, Any]) -> dict[str, Any]:
 		},
 		"recommendations": _build_recommendations(missing_keywords),
 	}
+	logger.info("Built report JSON: job_id=%s keys=%s", job_id, sorted(report_json.keys()))
 	return report_json
 
 
 def generate_report_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
 	"""Attach report JSON to payload for persistence in a downstream task."""
 	updated_payload = dict(payload)
+	logger.info("Generating report from payload: job_id=%s payload_keys=%s", payload.get("job_id"), sorted(payload.keys()))
 	updated_payload["report_json"] = build_report_json(payload)
+	logger.info("Generated report payload: job_id=%s report_keys=%s", payload.get("job_id"), sorted(updated_payload["report_json"].keys()))
 	return updated_payload

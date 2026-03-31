@@ -1,70 +1,319 @@
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { StepShell } from '../components/StepShell';
+import { useRevue } from '../context/RevueContext';
+import { getApiBaseUrl, readJsonResponse } from '../utils/api';
 
-const reportSections = [
-  {
-    title: 'Common Requirements',
-    body: 'Across the sample postings, communication, project ownership, strategic prioritization, and measurable outcomes appear most often.',
-  },
-  {
-    title: 'Resume Alignment',
-    body: 'The current resume suggests solid delivery experience and cross-functional collaboration, with room to sharpen impact statements and scope.',
-  },
-  {
-    title: 'Gaps',
-    body: 'Leadership metrics, repeated evidence of stakeholder influence, and tool-specific depth are the clearest missing signals.',
-  },
-  {
-    title: 'Learning Priorities',
-    body: 'Prioritize evidence-based storytelling, interview-ready case examples, and domain fluency for the roles you selected.',
-  },
-  {
-    title: 'Career Path Fit',
-    body: 'The direction appears strongest for roles that blend writing, systems thinking, and collaborative execution over narrowly technical specialization.',
-  },
-  {
-    title: 'Suggested Interview Questions',
-    body: 'Expect questions about cross-functional tradeoffs, ownership without authority, and how you measure the quality of your decisions.',
-  },
-];
+type DomainMatch = {
+  domain: string;
+  confidence: number;
+  matched_terms: string[];
+};
+
+type ReportContent = {
+  job_id: string;
+  status: string;
+  stage: string;
+  report_json: {
+    summary?: {
+      match_score?: number;
+      embedding_similarity?: number;
+      fit_label?: string;
+    };
+    highlights?: {
+      common_tools?: string[];
+      common_achievements?: string[];
+      matched_keywords?: string[];
+      missing_keywords?: string[];
+      posting_keywords?: string[];
+      resume_keywords?: string[];
+      domain_matches?: DomainMatch[];
+    };
+    recommendations?: string[];
+  };
+};
+
+type RenderSection = {
+  title: string;
+  body?: string;
+  items?: string[];
+  tone?: 'default' | 'signal' | 'conclusion';
+};
+
+type ReportSummary = {
+  matchScore: string;
+  embeddingSimilarity: string;
+  fitLabel: string;
+};
+
+function toPercent(value: number | undefined): string {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return 'n/a';
+  }
+  return `${Math.round(value * 100)}%`;
+}
+
+function buildSections(content: ReportContent | null): RenderSection[] {
+  if (!content) {
+    return [];
+  }
+
+  const summary = content.report_json.summary || {};
+  const highlights = content.report_json.highlights || {};
+  const recommendations = content.report_json.recommendations || [];
+  const domainMatches = highlights.domain_matches || [];
+  const commonTools = (highlights.common_tools || []).slice(0, 12);
+  const commonAchievements = (highlights.common_achievements || []).slice(0, 12);
+  const postingKeywords = (highlights.posting_keywords || []).slice(0, 10);
+  const resumeKeywords = (highlights.resume_keywords || []).slice(0, 10);
+
+  const matched = (highlights.matched_keywords || []).slice(0, 12);
+  const missing = (highlights.missing_keywords || []).slice(0, 12);
+
+  const topPostingSignals = commonTools.length ? commonTools : postingKeywords.length ? postingKeywords : [...matched, ...missing].slice(0, 10);
+  const differentiators = matched.length ? matched : resumeKeywords.slice(0, 8);
+  const domainSummary = domainMatches.length
+    ? domainMatches
+        .map((match) => `${match.domain} (${Math.round(match.confidence * 100)}%): ${match.matched_terms.join(', ')}`)
+        .join(' | ')
+    : 'No domain-specific differentiators were detected.';
+  const alignmentSummary = `Overall fit currently reads as ${summary.fit_label || 'n/a'}, with a match score of ${toPercent(summary.match_score)} and an embedding similarity of ${toPercent(summary.embedding_similarity)}.${differentiators.length ? ` The strongest overlap appears in ${differentiators.slice(0, 6).join(', ')}.` : ''}`;
+
+  return [
+    {
+      title: 'Most Common Tools Across the Postings',
+      items: topPostingSignals,
+      body: topPostingSignals.length ? undefined : 'No recurring tools or terms were detected in the postings.',
+      tone: 'signal',
+    },
+    {
+      title: 'Common Achievements Employers Look For',
+      items: commonAchievements,
+      body: commonAchievements.length ? undefined : 'No recurring achievement signals were detected from the current postings.',
+      tone: 'signal',
+    },
+    {
+      title: 'What Stands Out as Differentiators',
+      items: differentiators,
+      body: domainSummary,
+      tone: 'signal',
+    },
+    {
+      title: 'How Your Resume Aligns With These Postings',
+      body: alignmentSummary,
+      tone: 'default',
+    },
+    {
+      title: 'What’s Missing or Under Emphasized',
+      items: missing,
+      body: missing.length
+        ? 'These signals appear more often in the postings than in your current resume language.'
+        : 'No major missing or under-emphasized signals were detected.',
+      tone: 'signal',
+    },
+    {
+      title: 'What You Should Prioritize Learning Next',
+      items: recommendations,
+      body: recommendations.length ? undefined : 'No recommendations were generated.',
+      tone: 'conclusion',
+    },
+  ];
+}
+
+function buildSummary(content: ReportContent | null): ReportSummary {
+  const summary = content?.report_json.summary || {};
+  return {
+    matchScore: toPercent(summary.match_score),
+    embeddingSimilarity: toPercent(summary.embedding_similarity),
+    fitLabel: summary.fit_label ? summary.fit_label.toUpperCase() : 'N/A',
+  };
+}
+
+function buildPreviewHtml(content: ReportContent | null): string {
+  if (!content) {
+    return '<html><body style="font-family: Georgia, serif; padding: 24px;">No report content yet.</body></html>';
+  }
+
+  const sections = buildSections(content);
+  const sectionMarkup = sections
+    .map((section) => {
+      const itemsMarkup = (section.items || [])
+        .map((item) => `<span style="display:inline-block;margin:0 8px 8px 0;padding:8px 12px;border-radius:999px;background:#f2ede3;border:1px solid #e1d6c3;font-size:14px;">${item}</span>`)
+        .join('');
+      const bodyMarkup = section.body ? `<p style="margin: 12px 0 0; line-height: 1.6;">${section.body}</p>` : '';
+      return `<section style="margin-top: 22px;"><h2 style="margin: 0 0 8px; font-size: 20px; text-transform: uppercase; letter-spacing: 0.03em;">${section.title}</h2>${itemsMarkup ? `<div style="margin-top: 10px;">${itemsMarkup}</div>` : ''}${bodyMarkup}</section>`;
+    })
+    .join('');
+
+  return `<!doctype html>
+<html>
+  <body style="font-family: Georgia, serif; color: #202625; background: #fefdf9; padding: 24px;">
+    <h1 style="margin: 0 0 8px; font-size: 34px;">Revue Report</h1>
+    <p style="margin: 0; color: #5b6662; font-size: 14px;">Report ID: ${content.job_id}</p>
+    ${sectionMarkup}
+  </body>
+</html>`;
+}
 
 export function ReportPage() {
+  const router = useRouter();
+  const { jobId } = useRevue();
+  const [reportContent, setReportContent] = useState<ReportContent | null>(null);
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+
+  const activeJobId = useMemo(() => {
+    if (typeof router.query.job_id === 'string' && router.query.job_id) {
+      return router.query.job_id;
+    }
+    return jobId;
+  }, [jobId, router.query.job_id]);
+
+  useEffect(() => {
+    if (!activeJobId) {
+      setError('Missing job id. Please run a report first.');
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadReport() {
+      setIsLoading(true);
+      try {
+        const response = await fetch(`${getApiBaseUrl()}/report/${encodeURIComponent(activeJobId)}/content`);
+        const body = (await readJsonResponse(response)) as ReportContent | { detail?: string } | null;
+        if (!response.ok) {
+          const detail = body && 'detail' in body && typeof body.detail === 'string' ? body.detail : 'Unable to load generated report.';
+          throw new Error(detail);
+        }
+
+        if (cancelled) {
+          return;
+        }
+
+        setReportContent(body as ReportContent);
+        setError('');
+      } catch (loadError) {
+        if (cancelled) {
+          return;
+        }
+
+        const message = loadError instanceof Error ? loadError.message : 'Unable to load generated report.';
+        setError(message);
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    loadReport();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeJobId]);
+
+  const reportSections = buildSections(reportContent);
+  const reportSummary = buildSummary(reportContent);
+  const recommendationSection = reportSections.find((section) => section.title === 'What You Should Prioritize Learning Next');
+  const coreSections = reportSections.filter((section) => section.title !== 'What You Should Prioritize Learning Next');
+
   return (
     <StepShell
       className="step-layout--report"
       stepIndex={2}
       eyebrow="Step 3"
       title="Your Revue Report"
-      description="This page previews the final report structure and tone. The backend will eventually serve a generated PDF and store it in cloud storage."
-      aside={
-        <div className="info-panel">
-          <p className="eyebrow">Behind the scenes</p>
-          <p>The final generated PDF will be served by the backend and retrieved from cloud storage.</p>
-        </div>
-      }
+      description="A structured analysis of how your resume aligns with the selected job postings."
     >
-      <div className="report-toolbar">
-        <button type="button" className="button button--primary report-toolbar__download" onClick={() => window.print()}>
-          <span className="report-toolbar__icon" aria-hidden="true">
-            ↓
-          </span>
-          <span>Download PDF</span>
-        </button>
-        <p>Prototype behavior: this currently opens the browser print dialog so the UI can be reviewed without backend generation.</p>
-      </div>
+      <div className="report-container">
+        <section className="report-meta">
+          <div className="report-meta__identity">
+            <p className="eyebrow">Report Metadata</p>
+            <p className="report-meta__id">{reportContent ? `Report ID: ${reportContent.job_id}` : 'Report ID pending'}</p>
+            <p className="report-meta__status">
+              {reportContent
+                ? `${reportContent.status} • ${reportContent.stage}`
+                : isLoading
+                  ? 'Loading generated report...'
+                  : 'No report available.'}
+            </p>
+          </div>
+          <button type="button" className="button button--primary report-toolbar__download" onClick={() => window.print()}>
+            <span className="report-toolbar__icon" aria-hidden="true">
+              ↓
+            </span>
+            <span>Download PDF</span>
+          </button>
+        </section>
 
-      <div className="report-grid">
-        {reportSections.map((section) => (
-          <article key={section.title} className="report-card">
-            <p className="eyebrow">Section</p>
-            <h2>{section.title}</h2>
-            <p>{section.body}</p>
-          </article>
-        ))}
+        {error ? <p className="field-group__message field-group__message--error">{error}</p> : null}
+
+        <section className="report-fit-overview">
+          <p className="eyebrow report-fit-overview__label">Fit Overview</p>
+          <div className="report-fit-overview__cards">
+            <article className="report-metric-card report-metric-card--score">
+              <p>Match Score</p>
+              <strong>{reportSummary.matchScore}</strong>
+              <span>Overlap with recurring posting keywords.</span>
+            </article>
+            <article className="report-metric-card report-metric-card--fit">
+              <p>Fit Level</p>
+              <strong>{reportSummary.fitLabel}</strong>
+              <span>Qualitative fit based on current resume signals.</span>
+            </article>
+            <article className="report-metric-card report-metric-card--feature">
+              <p>Embedding Similarity</p>
+              <strong>{reportSummary.embeddingSimilarity}</strong>
+              <span>Semantic similarity across the combined postings.</span>
+            </article>
+          </div>
+        </section>
+
+        <section className="report-content">
+
+          <div className="report-grid report-grid--single">
+            {coreSections.map((section, index) => (
+              <article key={section.title} className="report-card report-card--bold">
+                <p className="eyebrow report-card__label">Section {String(index + 1).padStart(2, '0')}</p>
+                <h2 className="report-card__title">{section.title}</h2>
+                {section.items?.length ? (
+                  <div className="report-tags">
+                    {section.items.map((item) => (
+                      <span key={`${section.title}-${item}`} className="report-tag">
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                {section.body ? <p className="report-card__body">{section.body}</p> : null}
+              </article>
+            ))}
+          </div>
+
+          {recommendationSection ? (
+            <article className="report-conclusion">
+              <p className="eyebrow report-card__label">Conclusion</p>
+              <h2 className="report-card__title report-card__title--conclusion">{recommendationSection.title}</h2>
+              {recommendationSection.items?.length ? (
+                <ul className="report-recommendations">
+                  {recommendationSection.items.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              ) : recommendationSection.body ? (
+                <p className="report-card__body">{recommendationSection.body}</p>
+              ) : null}
+            </article>
+          ) : null}
+        </section>
       </div>
 
       <div className="form-actions form-actions--report">
-        <Link href="/processing" className="button button--ghost">
+        <Link href={activeJobId ? `/processing?job_id=${encodeURIComponent(activeJobId)}` : '/processing'} className="button button--ghost">
           Back
         </Link>
         <Link href="/postings" className="button button--secondary">

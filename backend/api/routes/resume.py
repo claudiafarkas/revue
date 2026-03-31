@@ -1,11 +1,14 @@
 """Routes for resume upload and ingestion."""
 
+import logging
+
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 from api.schemas.resume import ResumeUploadResponse
 from api.services.database import save_resume
 from api.services.airflow_trigger import trigger_airflow_dag
 
 router = APIRouter(prefix="/resume", tags=["resume"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("", response_model=ResumeUploadResponse, status_code=status.HTTP_202_ACCEPTED)
@@ -15,11 +18,13 @@ async def upload_resume(
 ) -> ResumeUploadResponse:
     """Accept a PDF resume and persist it for the provided job id."""
     filename = file.filename or "resume.pdf"        # file validation
+    logger.info("Resume upload requested: job_id=%s filename=%s", job_id, filename)
 
     if not filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Resume must be uploaded as a PDF.")
 
     file_data = await file.read()
+    logger.info("Read resume bytes: job_id=%s byte_count=%d", job_id, len(file_data))
 
     try:
         saved = save_resume(
@@ -29,20 +34,24 @@ async def upload_resume(
             file_data=file_data,
         )
     except Exception as exc:
+        logger.exception("Failed to save resume in database: job_id=%s filename=%s", job_id, filename)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Unable to store resume in PostgreSQL.",
         ) from exc
 
     if not saved:
+        logger.warning("Resume upload rejected due to unknown job_id: job_id=%s", job_id)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Unknown job_id '{job_id}'. Submit job postings first.",        # checks if the jobid is the same
         )
 
     try:
-        trigger_airflow_dag(job_id=job_id)  # call the Airflow DAG trigger service here to start the processing pipeline for the uploaded resume, passing the job_id as a parameter to trigger the correct DAG run for this job_id
+        dag_run_id = trigger_airflow_dag(job_id=job_id)  # call the Airflow DAG trigger service here to start the processing pipeline for the uploaded resume, passing the job_id as a parameter to trigger the correct DAG run for this job_id
+        logger.info("Triggered Airflow DAG successfully: job_id=%s dag_run_id=%s", job_id, dag_run_id)
     except Exception as exc:
+        logger.exception("Failed to trigger Airflow DAG: job_id=%s", job_id)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Resume stored, but failed to trigger processing pipeline.",
