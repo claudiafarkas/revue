@@ -11,6 +11,14 @@ type DomainMatch = {
   matched_terms: string[];
 };
 
+type Narrative = {
+  overview?: string;
+  strengths_summary?: string;
+  gaps_summary?: string;
+  resume_experience_level?: string;
+  posting_experience_level?: string;
+};
+
 type ReportContent = {
   job_id: string;
   status: string;
@@ -31,6 +39,7 @@ type ReportContent = {
       domain_matches?: DomainMatch[];
     };
     recommendations?: string[];
+    narrative?: Narrative;
   };
 };
 
@@ -62,7 +71,7 @@ function buildSections(content: ReportContent | null): RenderSection[] {
   const summary = content.report_json.summary || {};
   const highlights = content.report_json.highlights || {};
   const recommendations = content.report_json.recommendations || [];
-  const domainMatches = highlights.domain_matches || [];
+  const narrative = content.report_json.narrative;
   const commonTools = (highlights.common_tools || []).slice(0, 12);
   const commonAchievements = (highlights.common_achievements || []).slice(0, 12);
   const postingKeywords = (highlights.posting_keywords || []).slice(0, 10);
@@ -73,47 +82,60 @@ function buildSections(content: ReportContent | null): RenderSection[] {
 
   const topPostingSignals = commonTools.length ? commonTools : postingKeywords.length ? postingKeywords : [...matched, ...missing].slice(0, 10);
   const differentiators = matched.length ? matched : resumeKeywords.slice(0, 8);
-  const domainSummary = domainMatches.length
-    ? domainMatches
-        .map((match) => `${match.domain} (${Math.round(match.confidence * 100)}%): ${match.matched_terms.join(', ')}`)
-        .join(' | ')
-    : 'No domain-specific differentiators were detected.';
-  const alignmentSummary = `Overall fit currently reads as ${summary.fit_label || 'n/a'}, with a match score of ${toPercent(summary.match_score)} and an embedding similarity of ${toPercent(summary.embedding_similarity)}.${differentiators.length ? ` The strongest overlap appears in ${differentiators.slice(0, 6).join(', ')}.` : ''}`;
+
+  const experienceNote =
+    narrative?.resume_experience_level && narrative?.posting_experience_level
+      ? ` Your resume signals a ${narrative.resume_experience_level}-level candidate; these postings target ${narrative.posting_experience_level}-level.`
+      : '';
+
+  const alignmentSummary =
+    narrative?.overview ||
+    `Overall fit currently reads as ${summary.fit_label || 'n/a'}, with a match score of ${toPercent(summary.match_score)} and an embedding similarity of ${toPercent(summary.embedding_similarity)}.${differentiators.length ? ` The strongest overlap appears in ${differentiators.slice(0, 6).join(', ')}.` : ''}${experienceNote}`;
+
+  const strengthsBody =
+    narrative?.strengths_summary ||
+    (differentiators.length
+      ? `Your resume clearly addresses the following requirements from the postings: ${differentiators.slice(0, 6).join(', ')}.`
+      : 'No dominant strengths were detected in the current pass.');
+
+  const gapsBody =
+    narrative?.gaps_summary ||
+    (missing.length
+      ? 'These signals appear more often in the postings than in your current resume language.'
+      : 'No major missing or under-emphasized signals were detected.');
 
   return [
     {
-      title: 'Most Common Tools Across the Postings',
+      title: 'Overall Assessment',
+      body: alignmentSummary,
+      tone: 'default',
+    },
+    {
+      title: 'Most Common Tools and Requirements',
       items: topPostingSignals,
       body: topPostingSignals.length ? undefined : 'No recurring tools or terms were detected in the postings.',
       tone: 'signal',
     },
     {
-      title: 'Common Achievements Employers Look For',
+      title: 'Where Your Resume Is Strongest',
+      items: differentiators,
+      body: strengthsBody,
+      tone: 'signal',
+    },
+    {
+      title: 'What’s Missing or Under-Emphasized',
+      items: missing,
+      body: gapsBody,
+      tone: 'signal',
+    },
+    {
+      title: 'Recurring Employer Signals',
       items: commonAchievements,
       body: commonAchievements.length ? undefined : 'No recurring achievement signals were detected from the current postings.',
       tone: 'signal',
     },
     {
-      title: 'What Stands Out as Differentiators',
-      items: differentiators,
-      body: domainSummary,
-      tone: 'signal',
-    },
-    {
-      title: 'How Your Resume Aligns With These Postings',
-      body: alignmentSummary,
-      tone: 'default',
-    },
-    {
-      title: 'What’s Missing or Under Emphasized',
-      items: missing,
-      body: missing.length
-        ? 'These signals appear more often in the postings than in your current resume language.'
-        : 'No major missing or under-emphasized signals were detected.',
-      tone: 'signal',
-    },
-    {
-      title: 'What You Should Prioritize Learning Next',
+      title: 'Recommended Next Steps',
       items: recommendations,
       body: recommendations.length ? undefined : 'No recommendations were generated.',
       tone: 'conclusion',
@@ -135,24 +157,66 @@ function buildPreviewHtml(content: ReportContent | null): string {
     return '<html><body style="font-family: Georgia, serif; padding: 24px;">No report content yet.</body></html>';
   }
 
+  const summary = content.report_json.summary || {};
+  const matchScore = toPercent(summary.match_score);
+  const fitLabel = summary.fit_label ? summary.fit_label.toUpperCase() : 'N/A';
+  const embeddingSimilarity = toPercent(summary.embedding_similarity);
+
+  const metricsMarkup = `
+    <div style="display:flex;gap:16px;margin:16px 0 0;">
+      <div style="flex:1;padding:16px;border:1px solid #e1d6c3;border-radius:8px;">
+        <p style="margin:0 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:#5b6662;">Match Score</p>
+        <p style="margin:0;font-size:28px;font-weight:700;">${matchScore}</p>
+      </div>
+      <div style="flex:1;padding:16px;border:1px solid #e1d6c3;border-radius:8px;">
+        <p style="margin:0 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:#5b6662;">Fit Level</p>
+        <p style="margin:0;font-size:28px;font-weight:700;">${fitLabel}</p>
+      </div>
+      <div style="flex:1;padding:16px;border:1px solid #e1d6c3;border-radius:8px;">
+        <p style="margin:0 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:#5b6662;">Embedding Similarity</p>
+        <p style="margin:0;font-size:28px;font-weight:700;">${embeddingSimilarity}</p>
+      </div>
+    </div>`;
+
   const sections = buildSections(content);
   const sectionMarkup = sections
     .map((section) => {
       const itemsMarkup = (section.items || [])
-        .map((item) => `<span style="display:inline-block;margin:0 8px 8px 0;padding:8px 12px;border-radius:999px;background:#f2ede3;border:1px solid #e1d6c3;font-size:14px;">${item}</span>`)
+        .map((item) => `<span style="display:inline-block;margin:0 8px 8px 0;padding:6px 12px;border-radius:999px;background:#f2ede3;border:1px solid #e1d6c3;font-size:13px;">${item}</span>`)
         .join('');
-      const bodyMarkup = section.body ? `<p style="margin: 12px 0 0; line-height: 1.6;">${section.body}</p>` : '';
-      return `<section style="margin-top: 22px;"><h2 style="margin: 0 0 8px; font-size: 20px; text-transform: uppercase; letter-spacing: 0.03em;">${section.title}</h2>${itemsMarkup ? `<div style="margin-top: 10px;">${itemsMarkup}</div>` : ''}${bodyMarkup}</section>`;
+      const bodyMarkup = section.body ? `<p style="margin: 10px 0 0; line-height: 1.7; font-size: 15px;">${section.body}</p>` : '';
+      return `<section style="margin-top:28px;padding-top:20px;border-top:1px solid #e1d6c3;">
+        <h2 style="margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:0.08em;color:#5b6662;">${section.title}</h2>
+        ${itemsMarkup ? `<div style="margin-top:8px;">${itemsMarkup}</div>` : ''}
+        ${bodyMarkup}
+      </section>`;
     })
     .join('');
 
   return `<!doctype html>
 <html>
-  <body style="font-family: Georgia, serif; color: #202625; background: #fefdf9; padding: 24px;">
-    <h1 style="margin: 0 0 8px; font-size: 34px;">Revue Report</h1>
-    <p style="margin: 0; color: #5b6662; font-size: 14px;">Report ID: ${content.job_id}</p>
-    ${sectionMarkup}
-  </body>
+<head>
+  <meta charset="utf-8">
+  <title>Revue Report — ${content.job_id}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: Georgia, serif; color: #202625; background: #fff; margin: 0; padding: 32px 40px; max-width: 820px; }
+    @media print {
+      body { padding: 0; }
+      .no-print { display: none !important; }
+      section { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div style="border-bottom:2px solid #202625;padding-bottom:16px;margin-bottom:8px;">
+    <h1 style="margin:0 0 4px;font-size:32px;letter-spacing:-0.01em;">Revue Report</h1>
+    <p style="margin:0;color:#5b6662;font-size:13px;">Report ID: ${content.job_id} &nbsp;·&nbsp; ${content.status} &nbsp;·&nbsp; ${content.stage}</p>
+  </div>
+  ${metricsMarkup}
+  ${sectionMarkup}
+  <p style="margin-top:40px;font-size:12px;color:#9aada8;" class="no-print">Generated by Revue.ai</p>
+</body>
 </html>`;
 }
 
@@ -218,8 +282,8 @@ export function ReportPage() {
 
   const reportSections = buildSections(reportContent);
   const reportSummary = buildSummary(reportContent);
-  const recommendationSection = reportSections.find((section) => section.title === 'What You Should Prioritize Learning Next');
-  const coreSections = reportSections.filter((section) => section.title !== 'What You Should Prioritize Learning Next');
+  const recommendationSection = reportSections.find((section) => section.title === 'Recommended Next Steps');
+  const coreSections = reportSections.filter((section) => section.title !== 'Recommended Next Steps');
 
   return (
     <StepShell
@@ -242,7 +306,22 @@ export function ReportPage() {
                   : 'No report available.'}
             </p>
           </div>
-          <button type="button" className="button button--primary report-toolbar__download" onClick={() => window.print()}>
+          <button
+            type="button"
+            className="button button--primary report-toolbar__download"
+            disabled={!reportContent}
+            onClick={() => {
+              const html = buildPreviewHtml(reportContent);
+              const win = window.open('', '_blank', 'width=900,height=700');
+              if (!win) return;
+              win.document.write(html);
+              win.document.close();
+              win.onload = () => {
+                win.focus();
+                win.print();
+              };
+            }}
+          >
             <span className="report-toolbar__icon" aria-hidden="true">
               ↓
             </span>
