@@ -1,9 +1,7 @@
 """Routes for storing and validating job postings."""
 
 from uuid import uuid4
-
 from fastapi import APIRouter, HTTPException, status
-
 from api.schemas.job_postings import JobPostingsSubmissionRequest, JobPostingsSubmissionResponse
 from api.services.database import save_job_postings
 
@@ -15,7 +13,7 @@ def create_job_postings(
 	payload: JobPostingsSubmissionRequest,
 ) -> JobPostingsSubmissionResponse:
 	"""Accept job postings and persist them with a tracking identifier."""
-	job_id = f"revue-{uuid4().hex[:12]}"
+	job_id = f"revue-{uuid4().hex[:12]}"			# Generate a short unique job ID with a prefix for easier identification in the database
 
 	try:
 		save_job_postings(job_id=job_id, postings=payload.postings)

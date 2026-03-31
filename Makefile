@@ -1,4 +1,4 @@
-.PHONY: help frontend-install frontend-dev frontend-build backend-install backend-dev backend-run db-up db-down db-logs
+.PHONY: help frontend-install frontend-dev frontend-build backend-install backend-dev backend-run db-up db-down db-logs db-migrate
 
 FRONTEND_DIR := frontend
 FRONTEND_NPM_CACHE := $(CURDIR)/$(FRONTEND_DIR)/.npm-cache
@@ -18,6 +18,7 @@ help:
 	@printf "  db-up             Start the Revue PostgreSQL container on port 5434\n"
 	@printf "  db-down           Stop the Revue PostgreSQL container\n"
 	@printf "  db-logs           Tail logs for the Revue PostgreSQL container\n"
+	@printf "  db-migrate        Apply SQL migrations in backend/migrations\n"
 
 frontend-install:
 	mkdir -p $(FRONTEND_NPM_CACHE)
@@ -48,3 +49,6 @@ db-down:
 
 db-logs:
 	docker compose -f infra/docker-compose.yml logs -f postgres
+
+db-migrate:
+	cd $(BACKEND_DIR) && conda run -p $(CONDA_PREFIX) python scripts/run_migrations.py

@@ -7,72 +7,29 @@ from typing import Any
 
 import psycopg
 
+from api.services.migrations import run_migrations
 
-def _connection_string() -> str:
+
+def connection_string(mask_password: bool = False) -> str:
     """Build a PostgreSQL connection string from environment variables."""
     host = os.getenv("DB_HOST", "localhost")
     port = os.getenv("DB_PORT", "5434")
     db_name = os.getenv("DB_NAME", "revue")
     user = os.getenv("DB_USER", "revue")
     password = os.getenv("DB_PASSWORD", "revue_dev")
+    if mask_password:
+        password = "***"
     return f"host={host} port={port} dbname={db_name} user={user} password={password}"
 
 
 def initialize_database() -> None:
-    """Create required tables if they do not exist."""
-    with psycopg.connect(_connection_string()) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                CREATE TABLE IF NOT EXISTS job_batches (
-                    job_id TEXT PRIMARY KEY,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                );
-                """
-            )
-            cur.execute(
-                """
-                CREATE TABLE IF NOT EXISTS job_postings (
-                    id BIGSERIAL PRIMARY KEY,
-                    job_id TEXT NOT NULL REFERENCES job_batches(job_id) ON DELETE CASCADE,
-                    posting_index INTEGER NOT NULL,
-                    posting_text TEXT NOT NULL,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                    UNIQUE (job_id, posting_index)
-                );
-                """
-            )
-            cur.execute(
-                """
-                CREATE TABLE IF NOT EXISTS resumes (
-                    id BIGSERIAL PRIMARY KEY,
-                    job_id TEXT NOT NULL UNIQUE REFERENCES job_batches(job_id) ON DELETE CASCADE,
-                    filename TEXT NOT NULL,
-                    content_type TEXT,
-                    file_data BYTEA NOT NULL,
-                    uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                );
-                """
-            )
-            cur.execute(
-                """
-                CREATE TABLE IF NOT EXISTS reports (
-                    id BIGSERIAL PRIMARY KEY,
-                    job_id TEXT NOT NULL UNIQUE REFERENCES job_batches(job_id) ON DELETE CASCADE,
-                    status TEXT NOT NULL DEFAULT 'awaiting_resume',
-                    stage TEXT NOT NULL DEFAULT 'postings_stored',
-                    report_json JSONB,
-                    generated_at TIMESTAMPTZ,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                );
-                """
-            )
+    """Apply SQL migrations to ensure required tables exist."""
+    run_migrations(connection_string())
 
 
 def save_job_postings(job_id: str, postings: list[str]) -> None:
     """Persist a batch of postings under a generated job identifier."""
-    with psycopg.connect(_connection_string()) as conn:
+    with psycopg.connect(connection_string()) as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -111,7 +68,7 @@ def save_resume(job_id: str, filename: str, content_type: str | None, file_data:
 
     Returns False when the job_id does not exist yet.
     """
-    with psycopg.connect(_connection_string()) as conn:
+    with psycopg.connect(connection_string()) as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT 1 FROM job_batches WHERE job_id = %s;", (job_id,))
             if cur.fetchone() is None:
@@ -148,7 +105,7 @@ def save_resume(job_id: str, filename: str, content_type: str | None, file_data:
 
 def get_job_snapshot(job_id: str) -> dict[str, Any] | None:
     """Return a lightweight persistence snapshot for report status."""
-    with psycopg.connect(_connection_string()) as conn:
+    with psycopg.connect(connection_string()) as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT created_at FROM job_batches WHERE job_id = %s;", (job_id,))
             job_row = cur.fetchone()
@@ -170,7 +127,7 @@ def get_job_snapshot(job_id: str) -> dict[str, Any] | None:
 
 def get_report_snapshot(job_id: str) -> dict[str, Any] | None:
     """Return report-tracking fields for a job id."""
-    with psycopg.connect(_connection_string()) as conn:
+    with psycopg.connect(connection_string()) as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """

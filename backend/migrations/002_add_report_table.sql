@@ -1,0 +1,12 @@
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS reports (
+    id BIGSERIAL PRIMARY KEY,
+    job_id TEXT NOT NULL UNIQUE REFERENCES job_batches(job_id) ON DELETE CASCADE,
+    report_json JSONB,
+    generated_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+COMMIT;

@@ -1,1 +1,0 @@
-"""Placeholder task: extract job posting content."""
