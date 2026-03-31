@@ -1,42 +1,137 @@
 # Revue.ai
 
-Revue.ai is a calm, editorial-style career review product. The current repository contains a working frontend prototype and placeholder scaffolding for the backend, orchestration, vector storage, and infrastructure layers that will be added later.
+Revue.ai is a career review tool: paste job postings, upload a resume, and get a structured alignment report with matched skills, missing signals, and concrete recommendations.
+
+## System Flow
+
+```mermaid
+flowchart TD
+		U[User Browser]
+		FE[Frontend Next.js]
+		BE[Backend FastAPI]
+		DB[(PostgreSQL)]
+		AF[Airflow DAG revue_processing_pipeline]
+		GM[Gemini 2.0 Flash]
+
+		U --> FE
+		FE -->|POST /api/job-postings| BE
+		FE -->|POST /api/resume/upload| BE
+		FE -->|POST /api/resume/trigger| BE
+		FE -->|GET /api/report/:job_id/status| BE
+		FE -->|GET /api/report/:job_id/content| BE
+
+		BE --> DB
+		BE -->|Trigger DAG run with job_id| AF
+
+		AF -->|read postings + resume + write report_json| DB
+		AF -->|LLM analysis prompt| GM
+		GM -->|structured JSON response| AF
+```
+
+## File Communication Map
+
+```mermaid
+flowchart LR
+		subgraph Frontend
+			JPP[src/pages/JobPostingsPage.tsx]
+			RUP[src/pages/ResumeUploadPage.tsx]
+			PRP[src/pages/ProcessingPage.tsx]
+			REP[src/pages/ReportPage.tsx]
+			API[src/utils/api.ts]
+		end
+
+		subgraph Backend
+			MAIN[backend/api/main.py]
+			JR[backend/api/routes/job_postings.py]
+			RR[backend/api/routes/resume.py]
+			RPR[backend/api/routes/report.py]
+			DBS[backend/api/services/database.py]
+			ATS[backend/api/services/airflow_trigger.py]
+		end
+
+		subgraph Airflow
+			DAG[airflow/dags/revue_pipeline.py]
+			T1[airflow/tasks/compare_resume.py]
+			T2[airflow/tasks/llm_analysis.py]
+			T3[airflow/tasks/generate_report.py]
+			T4[airflow/tasks/store_output.py]
+		end
+
+		JPP --> API
+		RUP --> API
+		PRP --> API
+		REP --> API
+
+		API --> JR
+		API --> RR
+		API --> RPR
+
+		MAIN --> JR
+		MAIN --> RR
+		MAIN --> RPR
+
+		JR --> DBS
+		RR --> DBS
+		RPR --> DBS
+		RR --> ATS
+		ATS --> DAG
+
+		DAG --> T1 --> T2 --> T3 --> T4
+		T4 --> DBS
+```
+
+## Pipeline Stages (Current)
+
+```mermaid
+flowchart LR
+		A[extract_resume_text_step]
+		B[build_initial_payload]
+		C[clean_step]
+		D[resume_features_step]
+		E[compare_step - heuristic overlap]
+		F[llm_analysis_step - Gemini skills + narrative]
+		G[embeddings_step - hashed vector similarity]
+		H[report_step - assemble report_json]
+		I[store_step - persist report]
+
+		A --> B --> C --> D --> E --> F --> G --> H --> I
+```
+
+`llm_analysis_step` is fallback-safe. If `GEMINI_API_KEY` is not set (or `google-genai` is unavailable), the pipeline continues with heuristic comparison output.
+
+## Report JSON Shape
+
+```mermaid
+flowchart TD
+		R[report_json]
+		R --> S[summary: match_score, embedding_similarity, fit_label]
+		R --> H[highlights: matched/missing/resume/posting keywords, tools, domains]
+		R --> N[narrative: overview, strengths_summary, gaps_summary, level hints]
+		R --> C[recommendations]
+```
 
 ## Repository Layout
 
 ```text
 revue/
 ├── frontend/
-│   ├── pages/
-│   ├── public/
-│   ├── src/
-│   │   ├── components/
-│   │   ├── context/
-│   │   ├── pages/
-│   │   ├── styles/
-│   │   └── utils/
-│   ├── next-env.d.ts
-│   ├── package.json
-│   ├── tsconfig.json
-│   └── node_modules/
+│   └── src/
+│       ├── pages/
+│       ├── components/
+│       ├── context/
+│       ├── styles/
+│       └── utils/
 ├── backend/
 │   ├── api/
 │   │   ├── main.py
-│   │   ├── models/
 │   │   ├── routes/
 │   │   ├── schemas/
 │   │   └── services/
-│   ├── tests/
-│   ├── Dockerfile
-│   └── requirements.txt
+│   └── migrations/
 ├── airflow/
 │   ├── dags/
-│   ├── tasks/
-│   └── Dockerfile
+│   └── tasks/
 ├── vector_db/
-│   ├── embeddings.py
-│   ├── init.py
-│   └── queries.py
 ├── infra/
 │   ├── docker-compose.yml
 │   └── terraform/
@@ -44,112 +139,39 @@ revue/
 └── README.md
 ```
 
-## Current Status
+## Local Development
 
-- The frontend is implemented now and lives in `frontend/`.
-- The frontend is now served by the Next.js dev server.
-- The backend now has a minimal FastAPI shell with route registration, health checks, and stub endpoints for job postings, resume upload, and report status.
-- Airflow, vector database, and infrastructure areas remain scaffold-only by design.
-- The frontend uses TypeScript and `.tsx` files, even though the original desired shape referenced `.jsx`. Wrapper files are included where helpful so the structure stays close to the intended product layout without rewriting the current implementation.
-
-## Frontend Prototype Flow
-
-The current UI includes:
-
-1. Home / Get Started page
-2. Job posting input page
-3. Resume upload page
-4. Processing page with staged progress
-5. Report page with editorial report sections
-
-## Run The Frontend
+Start services from the repo root:
 
 ```bash
-cd frontend
-npm install
-npm run dev
-```
-
-To create a production build:
-
-```bash
-cd frontend
-npm run build
-```
-
-## Run From The Repo Root
-
-Use the root Makefile for common development commands:
-
-```bash
-make frontend-install
-make frontend-dev
-make backend-install
+make db-up
+make db-migrate
 make backend-dev
+make frontend-dev
 ```
 
-Other convenience targets:
+Useful defaults:
+
+- Frontend: `http://localhost:3101`
+- Backend: `http://127.0.0.1:8011`
+- Backend docs: `http://127.0.0.1:8011/docs`
+- Database: `localhost:5434`
+
+Install/update Airflow Python dependencies (after `airflow/requirements.txt` changes):
 
 ```bash
-make frontend-build
-make backend-run
-make db-up
-make db-down
-make db-logs
-make db-migrate
-make help
+docker compose -f infra/docker-compose.yml build airflow
+docker compose -f infra/docker-compose.yml up -d airflow
 ```
 
-The backend commands use your currently active Python environment (for you, Anaconda base), and frontend commands use a repo-local npm cache under `frontend/.npm-cache`.
-
-Frontend defaults to `http://localhost:3101` on `make frontend-dev`.
-Backend defaults to `http://127.0.0.1:8011` on `make backend-dev`.
-The backend serves FastAPI docs at `/docs` and a basic health endpoint at `/health`.
-
-## Local Database
-
-Revue now has its own Docker Compose PostgreSQL setup in [infra/docker-compose.yml](/Users/claudiafarkas/Development/revue/infra/docker-compose.yml).
-
-This is separate from any other local project containers and publishes PostgreSQL on `localhost:5434` so it does not collide with other services already using `5432`.
-
-Start it with:
+To enable LLM analysis in pipeline runs:
 
 ```bash
-make db-up
+export GEMINI_API_KEY=your_key_here
 ```
-
-Use these values in the VS Code PostgreSQL extension for the Revue project:
-
-- Host: `localhost`
-- Port: `5434`
-- Database: `revue`
-- User: `revue`
-- Password: set via DB_PASSWORD in your local environment
-- SSL: disabled
-
-Stop it with:
-
-```bash
-make db-down
-```
-
-Apply schema migrations with:
-
-```bash
-make db-migrate
-```
-
-SQL migration files live in `backend/migrations/` and are applied in filename order. Applied versions are tracked in the `schema_migrations` table.
-
-## Planned Backend Responsibilities
-
-- `backend/api/`: FastAPI application, routes, schemas, models, and services
-- `airflow/`: DAGs and task modules for the Revue analysis pipeline
-- `vector_db/`: embeddings and query helpers for semantic comparison and retrieval
-- `infra/`: local orchestration and future infrastructure provisioning
 
 ## Notes
 
-- The backend endpoints currently return stub responses and do not persist data yet.
-- Airflow, Terraform, and vector database implementation is intentionally left for later.
-- The working UI was preserved while the repo was reorganized around the longer-term architecture.
+- Frontend report download now uses a clean print document generated from `buildPreviewHtml` in `ReportPage.tsx`.
+- `compare_step` still provides deterministic baseline behavior.
+- `llm_analysis_step` upgrades extracted skills and narrative quality when available.
