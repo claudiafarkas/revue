@@ -1,5 +1,8 @@
 .PHONY: help frontend-install frontend-dev frontend-build backend-install backend-dev backend-run db-up db-down db-logs db-migrate
 
+-include .env
+export DB_HOST DB_PORT DB_NAME DB_USER DB_PASSWORD AIRFLOW_URL AIRFLOW_USERNAME AIRFLOW_PASSWORD NEXT_PUBLIC_API_BASE_URL
+
 FRONTEND_DIR := frontend
 FRONTEND_NPM_CACHE := $(CURDIR)/$(FRONTEND_DIR)/.npm-cache
 BACKEND_DIR := backend

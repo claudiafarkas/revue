@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { StepShell } from '../components/StepShell';
 import { useRevue } from '../context/RevueContext';
+import { getApiBaseUrl, readJsonResponse } from '../utils/api';
 
 function getValidationMessage(value: string) {
   if (!value.trim()) {
@@ -24,21 +25,49 @@ function getValidationMessage(value: string) {
 
 export function JobPostingsPage() {
   const router = useRouter();
-  const { postings, setPosting, addPosting } = useRevue();
+  const { postings, setPosting, addPosting, setJobId } = useRevue();
   const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const messages = useMemo(() => postings.map((posting) => getValidationMessage(posting)), [postings]);
 
   const canContinue = postings.slice(0, 3).every((posting) => posting.trim()) && messages.every((message) => !message);
 
-  function handleContinue() {
+  async function handleContinue() {
     setHasSubmitted(true);
 
     if (!canContinue) {
       return;
     }
 
-    router.push('/resume');
+    setIsSubmitting(true);
+    setSubmitError('');
+
+    try {
+      const cleanedPostings = postings.map((posting) => posting.trim()).filter((posting) => posting.length > 0);
+      const response = await fetch(`${getApiBaseUrl()}/job-postings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ postings: cleanedPostings }),
+      });
+
+      const body = (await readJsonResponse(response)) as { job_id?: string; detail?: string } | null;
+      if (!response.ok || !body?.job_id) {
+        const detail = body?.detail || 'Unable to save job postings.';
+        throw new Error(detail);
+      }
+
+      setJobId(body.job_id);
+      await router.push(`/resume?job_id=${encodeURIComponent(body.job_id)}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to save job postings.';
+      setSubmitError(message);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -83,11 +112,12 @@ export function JobPostingsPage() {
             <Link href="/" className="button button--ghost">
               Back
             </Link>
-            <button type="button" className="button button--primary" onClick={handleContinue}>
-              Continue to Resume
+            <button type="button" className="button button--primary" onClick={handleContinue} disabled={isSubmitting}>
+              {isSubmitting ? 'Saving postings...' : 'Continue to Resume'}
             </button>
           </div>
         </div>
+        {submitError ? <p className="field-group__message field-group__message--error">{submitError}</p> : null}
       </div>
     </StepShell>
   );

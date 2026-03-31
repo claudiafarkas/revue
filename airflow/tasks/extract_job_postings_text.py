@@ -9,11 +9,16 @@ import psycopg
 
 def _connection_string(mask_password: bool = False) -> str:
     """Build a PostgreSQL connection string from environment variables."""
-    host = os.getenv("DB_HOST", "localhost")
-    port = os.getenv("DB_PORT", "5434")
-    db_name = os.getenv("DB_NAME", "revue")
-    user = os.getenv("DB_USER", "revue")
-    password = os.getenv("DB_PASSWORD", "revue_dev")
+    required = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"]
+    missing = [key for key in required if not os.getenv(key)]
+    if missing:
+        raise RuntimeError(f"Missing required DB environment variables: {', '.join(missing)}")
+
+    host = os.environ["DB_HOST"]
+    port = os.environ["DB_PORT"]
+    db_name = os.environ["DB_NAME"]
+    user = os.environ["DB_USER"]
+    password = os.environ["DB_PASSWORD"]
     if mask_password:
         password = "***"
     return f"host={host} port={port} dbname={db_name} user={user} password={password}"

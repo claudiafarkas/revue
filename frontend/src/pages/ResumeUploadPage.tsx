@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { StepShell } from '../components/StepShell';
 import { useRevue } from '../context/RevueContext';
+import { getApiBaseUrl, readJsonResponse } from '../utils/api';
 
 function formatFileSize(size: number) {
   if (size < 1024 * 1024) {
@@ -15,10 +16,11 @@ function formatFileSize(size: number) {
 export function ResumeUploadPage() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const { resumeFile, setResumeFile } = useRevue();
+  const { resumeFile, setResumeFile, jobId, setJobId } = useRevue();
   const [error, setError] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (!resumeFile) {
@@ -52,6 +54,48 @@ export function ResumeUploadPage() {
 
     setError('');
     setResumeFile(file);
+  }
+
+  async function handleGenerateReport() {
+    if (!resumeFile) {
+      setError('Please upload a PDF resume.');
+      return;
+    }
+
+    const jobIdFromQuery = typeof router.query.job_id === 'string' ? router.query.job_id : '';
+    const activeJobId = jobId || jobIdFromQuery;
+    if (!activeJobId) {
+      setError('Missing job id. Please submit job postings first.');
+      return;
+    }
+
+    setError('');
+    setIsSubmitting(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('job_id', activeJobId);
+      formData.append('file', resumeFile, resumeFile.name);
+
+      const response = await fetch(`${getApiBaseUrl()}/resume`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const body = (await readJsonResponse(response)) as { job_id?: string; detail?: string } | null;
+      if (!response.ok || !body?.job_id) {
+        const detail = body?.detail || 'Unable to upload resume.';
+        throw new Error(detail);
+      }
+
+      setJobId(body.job_id);
+      await router.push(`/processing?job_id=${encodeURIComponent(body.job_id)}`);
+    } catch (submitError) {
+      const message = submitError instanceof Error ? submitError.message : 'Unable to upload resume.';
+      setError(message);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -130,10 +174,10 @@ export function ResumeUploadPage() {
             <button
               type="button"
               className="button button--primary"
-              onClick={() => router.push('/processing')}
-              disabled={!resumeFile}
+              onClick={handleGenerateReport}
+              disabled={!resumeFile || isSubmitting}
             >
-              Generate My Revue Report
+              {isSubmitting ? 'Uploading resume...' : 'Generate My Revue Report'}
             </button>
           </div>
         </section>

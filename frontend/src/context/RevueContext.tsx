@@ -12,6 +12,8 @@ type RevueContextValue = {
   addPosting: () => void;
   resumeFile: File | null;
   setResumeFile: (file: File | null) => void;
+  jobId: string;
+  setJobId: (jobId: string) => void;
 };
 
 const RevueContext = createContext<RevueContextValue | undefined>(undefined);
@@ -19,6 +21,7 @@ const RevueContext = createContext<RevueContextValue | undefined>(undefined);
 export function RevueProvider({ children }: PropsWithChildren) {
   const [postings, setPostings] = useState<string[]>(['', '', '']);
   const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [jobId, setJobId] = useState('');
 
   const value = useMemo<RevueContextValue>(
     () => ({
@@ -35,8 +38,10 @@ export function RevueProvider({ children }: PropsWithChildren) {
       },
       resumeFile,
       setResumeFile,
+      jobId,
+      setJobId,
     }),
-    [postings, resumeFile],
+    [postings, resumeFile, jobId],
   );
 
   return <RevueContext.Provider value={value}>{children}</RevueContext.Provider>;

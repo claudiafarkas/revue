@@ -14,6 +14,7 @@ import tasks.extract_resume_features
 import tasks.extract_resume_text
 import tasks.generate_embeddings
 import tasks.generate_report
+import tasks.report_status
 import tasks.store_output
 
 
@@ -26,18 +27,22 @@ def on_pipeline_failure(context: dict) -> None:
     if not job_id:
         return
 
-    host = os.getenv("DB_HOST", "localhost")
-    port = os.getenv("DB_PORT", "5434")
-    db_name = os.getenv("DB_NAME", "revue")
-    user = os.getenv("DB_USER", "revue")
-    password = os.getenv("DB_PASSWORD", "revue_dev")
+    required = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"]
+    if any(not os.getenv(key) for key in required):
+        return
+
+    host = os.environ["DB_HOST"]
+    port = os.environ["DB_PORT"]
+    db_name = os.environ["DB_NAME"]
+    user = os.environ["DB_USER"]
+    password = os.environ["DB_PASSWORD"]
     conn_str = f"host={host} port={port} dbname={db_name} user={user} password={password}"
 
     try:
         with psycopg.connect(conn_str) as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "UPDATE reports SET status = 'failed', updated_at = NOW() WHERE job_id = %s;",
+                    "UPDATE reports SET status = 'failed', stage = 'pipeline_failed', updated_at = NOW() WHERE job_id = %s;",
                     (job_id,),
                 )
     except Exception:
@@ -60,6 +65,7 @@ def get_job_id_from_conf(**context: Any) -> str:
 @task
 def build_initial_payload(job_id: str, resume_text: str) -> dict[str, Any]:
     """Load postings by job_id and attach resume text for downstream tasks."""
+    tasks.report_status.update_report_stage(job_id=job_id, stage="loading_postings")
     payload = tasks.extract_job_postings_text.load_job_postings_text_payload(job_id)
     payload["resume_text"] = resume_text
     return payload
@@ -67,31 +73,37 @@ def build_initial_payload(job_id: str, resume_text: str) -> dict[str, Any]:
 
 @task
 def clean_step(payload: dict[str, Any]) -> dict[str, Any]:
+    tasks.report_status.update_report_stage(job_id=payload["job_id"], stage="cleaning_text")
     return tasks.clean_text.clean_pipeline_inputs(payload)
 
 
 @task
 def resume_features_step(payload: dict[str, Any]) -> dict[str, Any]:
+    tasks.report_status.update_report_stage(job_id=payload["job_id"], stage="extracting_resume_features")
     return tasks.extract_resume_features.extract_resume_features_from_payload(payload)
 
 
 @task
 def extract_resume_text_step(job_id: str) -> str:
+    tasks.report_status.update_report_stage(job_id=job_id, stage="extracting_resume_text")
     return tasks.extract_resume_text.load_resume_text(job_id)
 
 
 @task
 def compare_step(payload: dict[str, Any]) -> dict[str, Any]:
+    tasks.report_status.update_report_stage(job_id=payload["job_id"], stage="comparing_requirements")
     return tasks.compare_resume.compare_pipeline_inputs(payload)
 
 
 @task
 def embeddings_step(payload: dict[str, Any]) -> dict[str, Any]:
+    tasks.report_status.update_report_stage(job_id=payload["job_id"], stage="generating_embeddings")
     return tasks.generate_embeddings.generate_embeddings_from_payload(payload)
 
 
 @task
 def report_step(payload: dict[str, Any]) -> dict[str, Any]:
+    tasks.report_status.update_report_stage(job_id=payload["job_id"], stage="generating_report")
     return tasks.generate_report.generate_report_from_payload(payload)
 
 

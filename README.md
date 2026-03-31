@@ -93,6 +93,10 @@ Other convenience targets:
 ```bash
 make frontend-build
 make backend-run
+make db-up
+make db-down
+make db-logs
+make db-migrate
 make help
 ```
 
@@ -101,6 +105,41 @@ The backend commands use your currently active Python environment (for you, Anac
 Frontend defaults to `http://localhost:3101` on `make frontend-dev`.
 Backend defaults to `http://127.0.0.1:8011` on `make backend-dev`.
 The backend serves FastAPI docs at `/docs` and a basic health endpoint at `/health`.
+
+## Local Database
+
+Revue now has its own Docker Compose PostgreSQL setup in [infra/docker-compose.yml](/Users/claudiafarkas/Development/revue/infra/docker-compose.yml).
+
+This is separate from any other local project containers and publishes PostgreSQL on `localhost:5434` so it does not collide with other services already using `5432`.
+
+Start it with:
+
+```bash
+make db-up
+```
+
+Use these values in the VS Code PostgreSQL extension for the Revue project:
+
+- Host: `localhost`
+- Port: `5434`
+- Database: `revue`
+- User: `revue`
+- Password: set via DB_PASSWORD in your local environment
+- SSL: disabled
+
+Stop it with:
+
+```bash
+make db-down
+```
+
+Apply schema migrations with:
+
+```bash
+make db-migrate
+```
+
+SQL migration files live in `backend/migrations/` and are applied in filename order. Applied versions are tracked in the `schema_migrations` table.
 
 ## Planned Backend Responsibilities
 
