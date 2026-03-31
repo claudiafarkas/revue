@@ -771,6 +771,113 @@ main {
   min-width: 0;
 }
 
+.report-fit-legend {
+  margin-top: 8px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(29, 42, 38, 0.14);
+  background: rgba(255, 252, 246, 0.85);
+  display: grid;
+  gap: 12px;
+}
+
+.report-fit-legend__header {
+  display: grid;
+  gap: 6px;
+}
+
+.report-fit-legend__header p {
+  font-size: 0.9rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.report-fit-legend__summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.report-fit-legend__toggle {
+  border: 1px solid rgba(29, 42, 38, 0.24);
+  background: rgba(255, 255, 255, 0.9);
+  color: #1d2a26;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.report-fit-legend__toggle:hover {
+  background: #f7f4ee;
+  border-color: rgba(29, 42, 38, 0.36);
+}
+
+.report-fit-legend__details {
+  display: grid;
+  gap: 12px;
+}
+
+.report-fit-legend__scale {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.report-fit-band {
+  border: 1px solid rgba(29, 42, 38, 0.12);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.78);
+  display: grid;
+  gap: 4px;
+}
+
+.report-fit-band--active {
+  border-color: rgba(93, 119, 103, 0.56);
+  background: rgba(212, 225, 214, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(93, 119, 103, 0.2);
+}
+
+.report-fit-band__title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #1a2522;
+}
+
+.report-fit-band p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.report-fit-band__metric {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.report-fit-band__metric span:last-child {
+  font-weight: 600;
+  color: #1f2d29;
+}
+
+.report-fit-legend__guidance {
+  margin: 0;
+  color: #22322c;
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.report-fit-legend__guidance strong {
+  color: #1a2522;
+}
+
 .report-metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1080,6 +1187,15 @@ main {
 
   .report-fit-overview__cards {
     grid-template-columns: 1fr;
+  }
+
+  .report-fit-legend__scale {
+    grid-template-columns: 1fr;
+  }
+
+  .report-fit-legend__summary-row {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .report-metrics {

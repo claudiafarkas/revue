@@ -56,6 +56,40 @@ type ReportSummary = {
   fitLabel: string;
 };
 
+type FitBand = {
+  label: 'Limited' | 'Emerging' | 'Moderate' | 'Strong';
+  minMatchScore: number;
+  minEmbeddingSimilarity: number;
+  guidance: string;
+};
+
+const FIT_BANDS: FitBand[] = [
+  {
+    label: 'Limited',
+    minMatchScore: 0,
+    minEmbeddingSimilarity: 0,
+    guidance: 'Start with the highest-frequency requirements and add clear evidence of direct experience.',
+  },
+  {
+    label: 'Emerging',
+    minMatchScore: 0.15,
+    minEmbeddingSimilarity: 0.2,
+    guidance: 'Start by adding 3-5 missing requirements with concrete, evidence-backed bullets.',
+  },
+  {
+    label: 'Moderate',
+    minMatchScore: 0.4,
+    minEmbeddingSimilarity: 0.45,
+    guidance: 'Tighten alignment language and increase measurable outcomes tied to required tools.',
+  },
+  {
+    label: 'Strong',
+    minMatchScore: 0.65,
+    minEmbeddingSimilarity: 0.65,
+    guidance: 'Maintain role alignment and tailor top achievements to each posting for final polish.',
+  },
+];
+
 function toPercent(value: number | undefined): string {
   if (typeof value !== 'number' || Number.isNaN(value)) {
     return 'n/a';
@@ -152,6 +186,29 @@ function buildSummary(content: ReportContent | null): ReportSummary {
   };
 }
 
+function getActiveFitBand(content: ReportContent | null): FitBand {
+  const summary = content?.report_json.summary || {};
+  const matchScore = typeof summary.match_score === 'number' ? summary.match_score : 0;
+  const embeddingSimilarity = typeof summary.embedding_similarity === 'number' ? summary.embedding_similarity : 0;
+
+  for (let i = FIT_BANDS.length - 1; i >= 0; i -= 1) {
+    const band = FIT_BANDS[i];
+    if (matchScore >= band.minMatchScore && embeddingSimilarity >= band.minEmbeddingSimilarity) {
+      return band;
+    }
+  }
+
+  return FIT_BANDS[0];
+}
+
+function getNextFitBand(activeBand: FitBand): FitBand | null {
+  const index = FIT_BANDS.findIndex((band) => band.label === activeBand.label);
+  if (index < 0 || index >= FIT_BANDS.length - 1) {
+    return null;
+  }
+  return FIT_BANDS[index + 1];
+}
+
 function buildPreviewHtml(content: ReportContent | null): string {
   if (!content) {
     return '<html><body style="font-family: Georgia, serif; padding: 24px;">No report content yet.</body></html>';
@@ -226,6 +283,7 @@ export function ReportPage() {
   const [reportContent, setReportContent] = useState<ReportContent | null>(null);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [showFitLegend, setShowFitLegend] = useState(false);
 
   const activeJobId = useMemo(() => {
     if (typeof router.query.job_id === 'string' && router.query.job_id) {
@@ -282,6 +340,8 @@ export function ReportPage() {
 
   const reportSections = buildSections(reportContent);
   const reportSummary = buildSummary(reportContent);
+  const activeFitBand = getActiveFitBand(reportContent);
+  const nextFitBand = getNextFitBand(activeFitBand);
   const recommendationSection = reportSections.find((section) => section.title === 'Recommended Next Steps');
   const coreSections = reportSections.filter((section) => section.title !== 'Recommended Next Steps');
 
@@ -349,6 +409,53 @@ export function ReportPage() {
               <strong>{reportSummary.embeddingSimilarity}</strong>
               <span>Semantic similarity across the combined postings.</span>
             </article>
+          </div>
+          <div className="report-fit-legend" aria-label="Fit scoring legend">
+            <div className="report-fit-legend__header">
+              <p className="eyebrow">Fit Legend</p>
+              <div className="report-fit-legend__summary-row">
+                <p>
+                  Fit Level combines Match Score + Embedding Similarity.
+                </p>
+                <button
+                  type="button"
+                  className="report-fit-legend__toggle"
+                  aria-expanded={showFitLegend}
+                  aria-controls="fit-legend-details"
+                  onClick={() => setShowFitLegend((value) => !value)}
+                >
+                  {showFitLegend ? 'Hide legend' : 'Show legend'}
+                </button>
+              </div>
+            </div>
+            {showFitLegend ? (
+              <div id="fit-legend-details" className="report-fit-legend__details">
+                <div className="report-fit-legend__scale" role="list" aria-label="Fit levels scale">
+                  {FIT_BANDS.map((band) => {
+                    const isActive = band.label.toUpperCase() === reportSummary.fitLabel;
+                    return (
+                      <article key={band.label} className={`report-fit-band${isActive ? ' report-fit-band--active' : ''}`} role="listitem">
+                        <p className="report-fit-band__title">{band.label}</p>
+                        <p className="report-fit-band__metric">
+                          <span>Match Score:</span>
+                          <span>{Math.round(band.minMatchScore * 100)}%+</span>
+                        </p>
+                        <p className="report-fit-band__metric">
+                          <span>Embedding Similarity:</span>
+                          <span>{Math.round(band.minEmbeddingSimilarity * 100)}%+</span>
+                        </p>
+                      </article>
+                    );
+                  })}
+                </div>
+                <p className="report-fit-legend__guidance">
+                  <strong>Current:</strong> {activeFitBand.label}. {activeFitBand.guidance}{' '}
+                  {nextFitBand
+                    ? `To reach ${nextFitBand.label}, aim for roughly ${Math.round(nextFitBand.minMatchScore * 100)}%+ Match Score and ${Math.round(nextFitBand.minEmbeddingSimilarity * 100)}%+ Embedding Similarity.`
+                    : 'You are already at the top band; focus on role-by-role tailoring to stay strong.'}
+                </p>
+              </div>
+            ) : null}
           </div>
         </section>
 
