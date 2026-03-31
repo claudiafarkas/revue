@@ -15,6 +15,7 @@ import tasks.extract_resume_features
 import tasks.extract_resume_text
 import tasks.generate_embeddings
 import tasks.generate_report
+import tasks.llm_analysis
 import tasks.report_status
 import tasks.store_output
 
@@ -142,6 +143,20 @@ def compare_step(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 @task
+def llm_analysis_step(payload: dict[str, Any]) -> dict[str, Any]:
+    logger.info("Starting llm_analysis_step: %s", _payload_summary(payload))
+    tasks.report_status.update_report_stage(job_id=payload["job_id"], stage="analyzing_with_llm")
+    updated_payload = tasks.llm_analysis.analyze_with_llm(payload)
+    llm_available = bool(updated_payload.get("llm_analysis"))
+    logger.info(
+        "Completed llm_analysis_step: job_id=%s llm_available=%s",
+        payload["job_id"],
+        llm_available,
+    )
+    return updated_payload
+
+
+@task
 def embeddings_step(payload: dict[str, Any]) -> dict[str, Any]:
     logger.info("Starting embeddings_step: %s", _payload_summary(payload))
     tasks.report_status.update_report_stage(job_id=payload["job_id"], stage="generating_embeddings")
@@ -203,6 +218,7 @@ with DAG(
     payload = clean_step(payload)
     payload = resume_features_step(payload)
     payload = compare_step(payload)
+    payload = llm_analysis_step(payload)
     payload = embeddings_step(payload)
     payload = report_step(payload)
 

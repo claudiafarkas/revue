@@ -138,6 +138,17 @@ def _build_recommendations(missing_keywords: list[str]) -> list[str]:
 	return recommendations
 
 
+def _build_narrative(llm_analysis: dict[str, Any]) -> dict[str, Any]:
+	"""Map GPT output fields into the ``narrative`` block stored in the report."""
+	return {
+		"overview": llm_analysis.get("overview", ""),
+		"strengths_summary": llm_analysis.get("strengths_summary", ""),
+		"gaps_summary": llm_analysis.get("gaps_summary", ""),
+		"resume_experience_level": llm_analysis.get("resume_experience_level", ""),
+		"posting_experience_level": llm_analysis.get("posting_experience_level", ""),
+	}
+
+
 def build_report_json(payload: dict[str, Any]) -> dict[str, Any]:
 	"""Create the final report JSON artifact from current pipeline payload."""
 	job_id = payload.get("job_id")
@@ -156,6 +167,9 @@ def build_report_json(payload: dict[str, Any]) -> dict[str, Any]:
 	if not isinstance(embedding_features, dict):
 		raise TypeError("'embedding_features' must be a dict")
 
+	llm_analysis = payload.get("llm_analysis")
+	llm_available = isinstance(llm_analysis, dict) and bool(llm_analysis)
+
 	match_score = float(comparison.get("match_score", 0.0))
 	matched_keywords = list(comparison.get("matched_keywords", []))
 	missing_keywords = list(comparison.get("missing_keywords", []))
@@ -164,21 +178,38 @@ def build_report_json(payload: dict[str, Any]) -> dict[str, Any]:
 	common_tools = _select_common_tools(posting_keywords, matched_keywords)
 	common_achievements = _select_common_achievements(missing_keywords)
 	average_similarity = float(embedding_features.get("average_similarity", 0.0))
+
+	# Use GPT fit label when available; it has richer context than the score threshold.
+	if llm_available and llm_analysis.get("overview"):
+		fit_label = llm_analysis.get("fit_assessment") or (
+			"strong" if match_score >= 0.65 else "moderate" if match_score >= 0.4 else "emerging"
+		)
+	else:
+		fit_label = "strong" if match_score >= 0.65 else "moderate" if match_score >= 0.4 else "emerging"
+
+	# Use LLM-generated recommendations when available; fall back to heuristics.
+	if llm_available:
+		llm_recs = [r for r in llm_analysis.get("recommendations", []) if isinstance(r, str)]
+		recommendations = llm_recs if llm_recs else _build_recommendations(missing_keywords)
+	else:
+		recommendations = _build_recommendations(missing_keywords)
+
 	logger.info(
-		"Building report JSON: job_id=%s match_score=%s matched=%d missing=%d embedding_similarity=%s",
+		"Building report JSON: job_id=%s match_score=%s matched=%d missing=%d embedding_similarity=%s llm_available=%s",
 		job_id,
 		match_score,
 		len(matched_keywords),
 		len(missing_keywords),
 		average_similarity,
+		llm_available,
 	)
 
-	report_json = {
+	report_json: dict[str, Any] = {
 		"job_id": job_id,
 		"summary": {
 			"match_score": round(match_score, 3),
 			"embedding_similarity": round(average_similarity, 3),
-			"fit_label": "strong" if match_score >= 0.65 else "moderate" if match_score >= 0.4 else "emerging",
+			"fit_label": fit_label,
 		},
 		"highlights": {
 			"common_tools": common_tools,
@@ -194,9 +225,13 @@ def build_report_json(payload: dict[str, Any]) -> dict[str, Any]:
 			},
 			"domain_matches": resume_features.get("domain_matches", []),
 		},
-		"recommendations": _build_recommendations(missing_keywords),
+		"recommendations": recommendations,
 	}
-	logger.info("Built report JSON: job_id=%s keys=%s", job_id, sorted(report_json.keys()))
+
+	if llm_available:
+		report_json["narrative"] = _build_narrative(llm_analysis)
+
+	logger.info("Built report JSON: job_id=%s keys=%s llm_available=%s", job_id, sorted(report_json.keys()), llm_available)
 	return report_json
 
 
