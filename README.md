@@ -1,7 +1,7 @@
 # Revue.ai
 
 Revue.ai is a career review tool: paste job postings, upload a resume, and get a structured alignment report with matched skills, missing signals, and concrete recommendations.
-![1775000327475](image/README/1775000327475.png)
+![1775005577414](image/README/1775005577414.png)
 
 ## System Flow
 
