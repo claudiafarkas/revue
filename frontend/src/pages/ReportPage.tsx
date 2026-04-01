@@ -228,6 +228,51 @@ function getNextFitBand(activeBand: FitBand): FitBand | null {
   return FIT_BANDS[index + 1];
 }
 
+function getFitScores(content: ReportContent | null): { matchScore: number; embeddingSimilarity: number } {
+  const summary = content?.report_json.summary || {};
+  return {
+    matchScore: typeof summary.match_score === 'number' ? summary.match_score : 0,
+    embeddingSimilarity: typeof summary.embedding_similarity === 'number' ? summary.embedding_similarity : 0,
+  };
+}
+
+function getBandForMetric(value: number, metric: 'minMatchScore' | 'minEmbeddingSimilarity'): FitBand {
+  for (let i = FIT_BANDS.length - 1; i >= 0; i -= 1) {
+    const band = FIT_BANDS[i];
+    if (value >= band[metric]) {
+      return band;
+    }
+  }
+  return FIT_BANDS[0];
+}
+
+function buildLegendGuidance(
+  activeBand: FitBand,
+  nextBand: FitBand | null,
+  scores: { matchScore: number; embeddingSimilarity: number },
+): string {
+  if (!nextBand) {
+    return 'You are already at the top band; focus on role-by-role tailoring to stay strong.';
+  }
+
+  const neededMatch = Math.max(0, nextBand.minMatchScore - scores.matchScore);
+  const neededEmbedding = Math.max(0, nextBand.minEmbeddingSimilarity - scores.embeddingSimilarity);
+
+  if (neededMatch > 0 && neededEmbedding > 0) {
+    return `To reach ${nextBand.label}, aim for roughly ${Math.round(nextBand.minMatchScore * 100)}%+ Match Score and ${Math.round(nextBand.minEmbeddingSimilarity * 100)}%+ Embedding Similarity.`;
+  }
+
+  if (neededMatch > 0) {
+    return `You already meet the ${nextBand.label} Embedding Similarity threshold. To reach ${nextBand.label} overall, raise Match Score from ${Math.round(scores.matchScore * 100)}% to about ${Math.round(nextBand.minMatchScore * 100)}%+ by aligning more exact requirement language.`;
+  }
+
+  if (neededEmbedding > 0) {
+    return `You already meet the ${nextBand.label} Match Score threshold. To reach ${nextBand.label} overall, raise Embedding Similarity from ${Math.round(scores.embeddingSimilarity * 100)}% to about ${Math.round(nextBand.minEmbeddingSimilarity * 100)}%+ by expanding role-context narrative around your existing skills.`;
+  }
+
+  return `${activeBand.guidance}`;
+}
+
 function buildSignalInterpretation(matchScore: number, embeddingSimilarity: number): string {
   const highMatch = matchScore >= 0.4;
   const highSimilarity = embeddingSimilarity >= 0.55;
@@ -386,9 +431,13 @@ export function ReportPage() {
   }, [activeJobId]);
 
   const reportSections = buildSections(reportContent);
+  const fitScores = getFitScores(reportContent);
   const reportSummary = buildSummary(reportContent);
   const activeFitBand = getActiveFitBand(reportContent);
   const nextFitBand = getNextFitBand(activeFitBand);
+  const matchBand = getBandForMetric(fitScores.matchScore, 'minMatchScore');
+  const embeddingBand = getBandForMetric(fitScores.embeddingSimilarity, 'minEmbeddingSimilarity');
+  const legendGuidance = buildLegendGuidance(activeFitBand, nextFitBand, fitScores);
   const recommendationSection = reportSections.find((section) => section.title === 'Recommended Next Steps');
   const coreSections = reportSections.filter((section) => section.title !== 'Recommended Next Steps');
 
@@ -477,6 +526,18 @@ export function ReportPage() {
             </div>
             {showFitLegend ? (
               <div id="fit-legend-details" className="report-fit-legend__details">
+                <div className="report-fit-legend__axis" aria-label="Per-metric fit tracks">
+                  <p className="report-fit-legend__axis-item">
+                    <span className="report-fit-legend__axis-label">Keyword Track</span>
+                    <strong>{matchBand.label}</strong>
+                    <span>{Math.round(fitScores.matchScore * 100)}%</span>
+                  </p>
+                  <p className="report-fit-legend__axis-item">
+                    <span className="report-fit-legend__axis-label">Semantic Track</span>
+                    <strong>{embeddingBand.label}</strong>
+                    <span>{Math.round(fitScores.embeddingSimilarity * 100)}%</span>
+                  </p>
+                </div>
                 <div className="report-fit-legend__scale" role="list" aria-label="Fit levels scale">
                   {FIT_BANDS.map((band) => {
                     const isActive = band.label.toUpperCase() === reportSummary.fitLabel;
@@ -497,9 +558,7 @@ export function ReportPage() {
                 </div>
                 <p className="report-fit-legend__guidance">
                   <strong>Current:</strong> {activeFitBand.label}. {activeFitBand.guidance}{' '}
-                  {nextFitBand
-                    ? `To reach ${nextFitBand.label}, aim for roughly ${Math.round(nextFitBand.minMatchScore * 100)}%+ Match Score and ${Math.round(nextFitBand.minEmbeddingSimilarity * 100)}%+ Embedding Similarity.`
-                    : 'You are already at the top band; focus on role-by-role tailoring to stay strong.'}
+                  {legendGuidance}
                 </p>
               </div>
             ) : null}
