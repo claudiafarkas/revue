@@ -1024,6 +1024,17 @@ main {
   border-top: 1px solid rgba(29, 42, 38, 0.07);
 }
 
+.report-card__body--lede {
+  font-style: italic;
+  color: #2e3d39;
+  border-top: none;
+  padding-top: 0;
+}
+
+.report-card__body--lede + .report-card__body {
+  margin-top: 10px;
+}
+
 .report-tags {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, max-content));
@@ -1069,15 +1080,104 @@ main {
 }
 
 .report-recommendations {
-  margin: 8px 0 0;
-  padding-left: 20px;
+  margin: 10px 0 0;
+  padding-left: 0;
+  list-style: none;
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
-.report-recommendations li {
-  gap: 0;
-  font-size: 1rem;
+.report-recommendation {
+  position: relative;
+  margin: 0;
+  padding: 12px 14px 12px 34px;
+  border-radius: 14px;
+  border: 1px solid rgba(29, 42, 38, 0.12);
+  background: rgba(255, 255, 255, 0.7);
+  font-size: 0.98rem;
+  line-height: 1.58;
+  color: #263330;
+}
+
+.report-recommendation::before {
+  content: "→";
+  position: absolute;
+  left: 12px;
+  top: 13px;
+  color: #6f5d43;
+  font-weight: 700;
+}
+
+.report-recommendation--rewrite {
+  padding: 12px 14px 12px 18px;
+}
+
+.report-recommendation--rewrite::before {
+  content: none;
+}
+
+.report-recommendation__label {
+  margin: 0 0 8px;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #5f6f69;
+  font-weight: 600;
+}
+
+.report-recommendation__line {
+  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.report-recommendation__line + .report-recommendation__line {
+  margin-top: 8px;
+}
+
+.report-recommendation__tag {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(122, 109, 86, 0.28);
+  background: rgba(240, 235, 226, 0.75);
+  color: #554c3f;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.report-recommendation__tag--next {
+  border-color: rgba(72, 112, 86, 0.34);
+  background: rgba(228, 242, 232, 0.88);
+  color: #2f5a43;
+}
+
+.report-recommendation__quote {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(248, 244, 236, 0.9);
+  border: 1px solid rgba(29, 42, 38, 0.09);
+  font-style: italic;
+  color: #364742;
+}
+
+.report-recommendation__quote--after {
+  background: rgba(235, 244, 236, 0.88);
+  border-color: rgba(76, 124, 92, 0.24);
+  color: #1f4933;
+  font-style: normal;
+}
+
+.report-recommendation__why {
+  margin: 10px 0 0;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(29, 42, 38, 0.14);
+  font-size: 0.9rem;
+  color: #3b4f49;
 }
 
 .report-preview-pane {

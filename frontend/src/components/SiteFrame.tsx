@@ -17,9 +17,6 @@ export function SiteFrame({ children }: PropsWithChildren) {
 
       <main>{children}</main>
 
-      <footer className="footer-note">
-        <p>UI prototype for the Revue.ai workflow. Backend integration comes next.</p>
-      </footer>
     </div>
   );
 }

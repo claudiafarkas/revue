@@ -18,6 +18,7 @@ services:
       DB_NAME: revue
       DB_USER: revue
       DB_PASSWORD: ${DB_PASSWORD}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
     entrypoint: airflow db migrate
     restart: "no"
 
@@ -37,6 +38,7 @@ services:
       DB_NAME: revue
       DB_USER: revue
       DB_PASSWORD: ${DB_PASSWORD}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
     command: airflow scheduler
     restart: unless-stopped
 
@@ -56,6 +58,7 @@ services:
       DB_NAME: revue
       DB_USER: revue
       DB_PASSWORD: ${DB_PASSWORD}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
     command: airflow webserver
     ports:
       - "8080:8080"

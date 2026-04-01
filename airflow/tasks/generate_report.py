@@ -124,18 +124,35 @@ def _select_common_achievements(missing_keywords: list[str]) -> list[str]:
 	return _filter_report_keywords(missing_keywords)[:12]
 
 
-def _build_recommendations(missing_keywords: list[str]) -> list[str]:
-	"""Generate concise recommendations based on missing keywords."""
-	if not missing_keywords:
-		return ["Your resume already reflects many target job requirements. Tailor examples for each application."]
+def _looks_like_rewrite_recommendation(item: str) -> bool:
+	"""Detect whether a recommendation includes a concrete before/after rewrite."""
+	text = item.lower()
+	return "rewrite" in text and "->" in text
 
+
+def _build_recommendations(missing_keywords: list[str], resume_keywords: list[str]) -> list[str]:
+	"""Generate actionable resume-edit recommendations with concrete rewrite examples."""
 	top_gaps = missing_keywords[:5]
-	recommendations = [
-		"Add evidence-backed bullet points for these recurring requirements: " + ", ".join(top_gaps) + ".",
-		"Prioritize measurable outcomes and context (scope, impact, tools) in experience bullets.",
-		"Update summary and skills sections to match target role language while staying truthful.",
+	anchor = resume_keywords[:3]
+
+	if not top_gaps:
+		return [
+			'Rewrite "Worked on multiple cross-functional projects." -> "Led 4 cross-functional launches with Product, Design, and Engineering, shipping milestones 2 weeks ahead of plan." | Why: adds scope, partners, and measurable impact.',
+			'Rewrite "Responsible for improving processes." -> "Redesigned onboarding workflow, reducing handoff time by 32% and improving first-response SLA from 36h to 18h." | Why: replaces vague ownership language with concrete outcomes.',
+			"Add one quantified bullet per recent role using this formula: action + tool + scope + measurable result.",
+		]
+
+	primary_gap = top_gaps[0]
+	secondary_gap = top_gaps[1] if len(top_gaps) > 1 else top_gaps[0]
+	anchor_phrase = ", ".join(anchor) if anchor else "your strongest existing skills"
+
+	return [
+		f'Rewrite "Experienced with {primary_gap}." -> "Built and maintained {primary_gap} workflows in production, supporting [team/feature] and improving [metric] by [X%]." | Why: converts keyword-only language into credible, ATS-friendly impact evidence.',
+		f'Rewrite "Worked with {secondary_gap}." -> "Used {secondary_gap} to deliver [project outcome], collaborating with [stakeholders] and reducing [cost/time/risk] by [X%]." | Why: ties the requirement to business value and collaboration context.',
+		f"Add a targeted summary line that bridges {anchor_phrase} to missing requirements ({', '.join(top_gaps[:3])}) so your positioning matches the role language.",
+		f"For each missing requirement ({', '.join(top_gaps[:4])}), add one bullet under the most relevant role with this structure: what you built, tool used, scale, and measurable outcome.",
+		"Replace weak verbs (helped, worked on, involved in) with ownership verbs (led, built, designed, implemented) and add one metric to every updated bullet.",
 	]
-	return recommendations
 
 
 def _build_narrative(llm_analysis: dict[str, Any]) -> dict[str, Any]:
@@ -189,10 +206,24 @@ def build_report_json(payload: dict[str, Any]) -> dict[str, Any]:
 
 	# Use LLM-generated recommendations when available; fall back to heuristics.
 	if llm_available:
-		llm_recs = [r for r in llm_analysis.get("recommendations", []) if isinstance(r, str)]
-		recommendations = llm_recs if llm_recs else _build_recommendations(missing_keywords)
+		llm_recs = [r.strip() for r in llm_analysis.get("recommendations", []) if isinstance(r, str) and r.strip()]
+		recommendations = llm_recs if llm_recs else _build_recommendations(missing_keywords, resume_keywords)
 	else:
-		recommendations = _build_recommendations(missing_keywords)
+		recommendations = _build_recommendations(missing_keywords, resume_keywords)
+
+	# Top up recommendations to ensure at least 5 practical edits, and at least one rewrite example.
+	fallback_recs = _build_recommendations(missing_keywords, resume_keywords)
+	if not any(_looks_like_rewrite_recommendation(item) for item in recommendations):
+		recommendations = [*fallback_recs, *recommendations]
+
+	for candidate in fallback_recs:
+		if len(recommendations) >= 5:
+			break
+		if candidate not in recommendations:
+			recommendations.append(candidate)
+
+	# Keep output concise for frontend rendering.
+	recommendations = recommendations[:7]
 
 	logger.info(
 		"Building report JSON: job_id=%s match_score=%s matched=%d missing=%d embedding_similarity=%s llm_available=%s",

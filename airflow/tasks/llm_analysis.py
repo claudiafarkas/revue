@@ -46,11 +46,11 @@ exactly these keys:
   "strengths_summary": "2-3 sentences on what the candidate does well relative to these roles.",
   "gaps_summary": "2-3 sentences on gaps or under-represented experience.",
   "recommendations": [
-    "Specific, actionable recommendation 1.",
-    "Specific, actionable recommendation 2.",
-    "Specific, actionable recommendation 3.",
-    "Specific, actionable recommendation 4.",
-    "Specific, actionable recommendation 5."
+        "Rewrite \"<actual resume phrase>\" -> \"<improved resume bullet>\" | Why: <short rationale tied to posting requirements>",
+        "Rewrite \"<actual resume phrase>\" -> \"<improved resume bullet>\" | Why: <short rationale tied to posting requirements>",
+        "Rewrite \"<actual resume phrase>\" -> \"<improved resume bullet>\" | Why: <short rationale tied to posting requirements>",
+        "Add bullet under <section>: \"<new bullet with tool + scope + metric>\" | Why: <gap addressed>",
+        "Add targeted summary line: \"<summary line aligned with role language>\" | Why: <fit improvement>"
   ]
 }}
 
@@ -60,7 +60,11 @@ Field definitions:
 - matched_skills: skills clearly present in the resume that address a job requirement — allow synonyms and close equivalents (e.g. "Postgres" matches "relational databases").
 - missing_skills: requirements from the postings not adequately represented in the resume.
 - overview / strengths_summary / gaps_summary: written for the candidate, professional tone, specific to the actual content.
-- recommendations: highly specific action items referencing real gaps from the analysis — NOT generic advice.
+- recommendations: highly specific resume edits referencing real gaps from the analysis — NOT generic advice.
+    - At least 3 recommendations must be explicit before/after rewrites in this exact style:
+        Rewrite "<actual phrase from resume>" -> "<improved phrase>" | Why: <reason>
+    - Use phrases that actually appear in the resume when possible; avoid inventing technologies not present in resume or postings.
+    - Keep each recommendation to 1-2 sentences max.
 
 RESUME:
 {resume}

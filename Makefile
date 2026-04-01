@@ -1,7 +1,7 @@
 .PHONY: help frontend-install frontend-dev frontend-build backend-install backend-dev backend-run db-up db-down db-logs db-migrate
 
 -include .env
-export DB_HOST DB_PORT DB_NAME DB_USER DB_PASSWORD AIRFLOW_URL AIRFLOW_USERNAME AIRFLOW_PASSWORD NEXT_PUBLIC_API_BASE_URL
+export DB_HOST DB_PORT DB_NAME DB_USER DB_PASSWORD AIRFLOW_URL AIRFLOW_USERNAME AIRFLOW_PASSWORD NEXT_PUBLIC_API_BASE_URL GEMINI_API_KEY
 
 FRONTEND_DIR := frontend
 FRONTEND_NPM_CACHE := $(CURDIR)/$(FRONTEND_DIR)/.npm-cache
@@ -45,13 +45,13 @@ backend-run:
 	cd $(BACKEND_DIR) && conda run -p $(CONDA_PREFIX) uvicorn api.main:app --host 0.0.0.0 --port $(BACKEND_PORT)
 
 db-up:
-	docker compose -f infra/docker-compose.yml up -d postgres
+	docker compose -f infra/docker-compose.yml --env-file .env up -d postgres
 
 db-down:
-	docker compose -f infra/docker-compose.yml down
+	docker compose -f infra/docker-compose.yml --env-file .env down
 
 db-logs:
-	docker compose -f infra/docker-compose.yml logs -f postgres
+	docker compose -f infra/docker-compose.yml --env-file .env logs -f postgres
 
 db-migrate:
 	cd $(BACKEND_DIR) && conda run -p $(CONDA_PREFIX) python scripts/run_migrations.py

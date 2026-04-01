@@ -97,6 +97,20 @@ function toPercent(value: number | undefined): string {
   return `${Math.round(value * 100)}%`;
 }
 
+function parseRewriteRecommendation(item: string): { before: string; after: string; why: string } | null {
+  const match = item.match(/^Rewrite\s+"([\s\S]+?)"\s*->\s*"([\s\S]+?)"\s*\|\s*Why:\s*([\s\S]+)$/i);
+  if (!match) {
+    return null;
+  }
+
+  const [, before, after, why] = match;
+  return {
+    before: before.trim(),
+    after: after.trim(),
+    why: why.trim(),
+  };
+}
+
 function buildSections(content: ReportContent | null): RenderSection[] {
   if (!content) {
     return [];
@@ -122,9 +136,14 @@ function buildSections(content: ReportContent | null): RenderSection[] {
       ? ` Your resume signals a ${narrative.resume_experience_level}-level candidate; these postings target ${narrative.posting_experience_level}-level.`
       : '';
 
-  const alignmentSummary =
+  const matchScore = typeof summary.match_score === 'number' ? summary.match_score : 0;
+  const embeddingSimilarity = typeof summary.embedding_similarity === 'number' ? summary.embedding_similarity : 0;
+
+  const overviewText =
     narrative?.overview ||
     `Overall fit currently reads as ${summary.fit_label || 'n/a'}, with a match score of ${toPercent(summary.match_score)} and an embedding similarity of ${toPercent(summary.embedding_similarity)}.${differentiators.length ? ` The strongest overlap appears in ${differentiators.slice(0, 6).join(', ')}.` : ''}${experienceNote}`;
+
+  const alignmentSummary = `${overviewText}\n\n${buildSignalInterpretation(matchScore, embeddingSimilarity)}`;
 
   const strengthsBody =
     narrative?.strengths_summary ||
@@ -207,6 +226,34 @@ function getNextFitBand(activeBand: FitBand): FitBand | null {
     return null;
   }
   return FIT_BANDS[index + 1];
+}
+
+function buildSignalInterpretation(matchScore: number, embeddingSimilarity: number): string {
+  const highMatch = matchScore >= 0.4;
+  const highSimilarity = embeddingSimilarity >= 0.55;
+  const lowMatch = matchScore < 0.25;
+  const lowSimilarity = embeddingSimilarity < 0.35;
+
+  const matchPct = Math.round(matchScore * 100);
+  const simPct = Math.round(embeddingSimilarity * 100);
+
+  if (lowMatch && highSimilarity) {
+    return `A ${matchPct}% Match Score alongside ${simPct}% Embedding Similarity tells you your resume is written in the same general professional vocabulary as these job postings, but it doesn't echo the specific high-frequency keywords they prioritize. This usually means you're using synonyms, alternate phrasings, or describing responsibilities differently than the job descriptions phrase their requirements. Review the missing keywords below and add them wherever they genuinely apply.`;
+  }
+  if (highMatch && highSimilarity) {
+    return `A ${matchPct}% Match Score and ${simPct}% Embedding Similarity is a strong result. Your resume closely mirrors both the specific keywords and the overall vocabulary of these postings — your language and emphasis are well-calibrated to this target. Focus on depth and quantifiable evidence rather than broad keyword coverage.`;
+  }
+  if (highMatch && lowSimilarity) {
+    return `A ${matchPct}% Match Score with only ${simPct}% Embedding Similarity is an unusual combination. You're hitting several of the right keywords, but the overall shape of your resume's vocabulary diverges from these postings. This can happen when key terms are listed without the surrounding context those roles typically carry. Consider expanding the narrative around your skills, not just the terms themselves.`;
+  }
+  if (lowMatch && lowSimilarity) {
+    return `A ${matchPct}% Match Score and ${simPct}% Embedding Similarity indicates limited overlap with both the specific keywords and the general vocabulary of these postings. The role may require a meaningfully different skill set or domain language from what's currently reflected in your resume. The missing keywords section is the best place to start.`;
+  }
+  // Moderate zone
+  if (matchScore >= 0.25 && embeddingSimilarity >= 0.35) {
+    return `A ${matchPct}% Match Score and ${simPct}% Embedding Similarity shows reasonable alignment — your vocabulary is in the right territory but there's room to strengthen keyword coverage. Prioritize the missing keywords that appear most often across the postings, and make sure your resume reflects them in context, not just as isolated terms.`;
+  }
+  return `Match Score: ${matchPct}%, Embedding Similarity: ${simPct}%. Review the missing keywords and Fit Legend below for guidance on where to focus.`;
 }
 
 function buildPreviewHtml(content: ReportContent | null): string {
@@ -475,7 +522,11 @@ export function ReportPage() {
                     ))}
                   </div>
                 ) : null}
-                {section.body ? <p className="report-card__body">{section.body}</p> : null}
+                {section.body
+                  ? section.body.split('\n\n').map((paragraph, i) => (
+                      <p key={i} className={i === 0 ? 'report-card__body report-card__body--lede' : 'report-card__body'}>{paragraph}</p>
+                    ))
+                  : null}
               </article>
             ))}
           </div>
@@ -486,9 +537,27 @@ export function ReportPage() {
               <h2 className="report-card__title report-card__title--conclusion">{recommendationSection.title}</h2>
               {recommendationSection.items?.length ? (
                 <ul className="report-recommendations">
-                  {recommendationSection.items.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
+                  {recommendationSection.items.map((item) => {
+                    const parsed = parseRewriteRecommendation(item);
+                    if (!parsed) {
+                      return <li key={item} className="report-recommendation">{item}</li>;
+                    }
+
+                    return (
+                      <li key={item} className="report-recommendation report-recommendation--rewrite">
+                        <p className="report-recommendation__label">Rewrite suggestion</p>
+                        <p className="report-recommendation__line">
+                          <span className="report-recommendation__tag">Current</span>
+                          <span className="report-recommendation__quote">{parsed.before}</span>
+                        </p>
+                        <p className="report-recommendation__line">
+                          <span className="report-recommendation__tag report-recommendation__tag--next">Updated</span>
+                          <span className="report-recommendation__quote report-recommendation__quote--after">{parsed.after}</span>
+                        </p>
+                        <p className="report-recommendation__why">Why this helps: {parsed.why}</p>
+                      </li>
+                    );
+                  })}
                 </ul>
               ) : recommendationSection.body ? (
                 <p className="report-card__body">{recommendationSection.body}</p>
@@ -499,7 +568,7 @@ export function ReportPage() {
       </div>
 
       <div className="form-actions form-actions--report">
-        <Link href={activeJobId ? `/processing?job_id=${encodeURIComponent(activeJobId)}` : '/processing'} className="button button--ghost">
+        <Link href="/resume" className="button button--ghost">
           Back
         </Link>
         <Link href="/postings" className="button button--secondary">
