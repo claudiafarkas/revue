@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import { StepShell } from '../components/StepShell';
 import { useRevue } from '../context/RevueContext';
 import { getApiBaseUrl, readJsonResponse } from '../utils/api';
+import { formatPipelineStatus } from '../utils/status';
 
 type DomainMatch = {
   domain: string;
@@ -342,6 +343,8 @@ function buildPreviewHtml(content: ReportContent | null): string {
     })
     .join('');
 
+  const humanStatus = formatPipelineStatus(content.status, content.stage);
+
   return `<!doctype html>
 <html>
 <head>
@@ -360,7 +363,7 @@ function buildPreviewHtml(content: ReportContent | null): string {
 <body>
   <div style="border-bottom:2px solid #202625;padding-bottom:16px;margin-bottom:8px;">
     <h1 style="margin:0 0 4px;font-size:32px;letter-spacing:-0.01em;">Revue Report</h1>
-    <p style="margin:0;color:#5b6662;font-size:13px;">Report ID: ${content.job_id} &nbsp;·&nbsp; ${content.status} &nbsp;·&nbsp; ${content.stage}</p>
+    <p style="margin:0;color:#5b6662;font-size:13px;">Report ID: ${content.job_id} &nbsp;·&nbsp; ${humanStatus}</p>
   </div>
   ${metricsMarkup}
   ${sectionMarkup}
@@ -456,7 +459,7 @@ export function ReportPage() {
             <p className="report-meta__id">{reportContent ? `Report ID: ${reportContent.job_id}` : 'Report ID pending'}</p>
             <p className="report-meta__status">
               {reportContent
-                ? `${reportContent.status} • ${reportContent.stage}`
+                ? formatPipelineStatus(reportContent.status, reportContent.stage)
                 : isLoading
                   ? 'Loading generated report...'
                   : 'No report available.'}

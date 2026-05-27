@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import { StepShell } from '../components/StepShell';
 import { useRevue } from '../context/RevueContext';
 import { getApiBaseUrl, readJsonResponse } from '../utils/api';
+import { formatPipelineStage, formatPipelineStatus } from '../utils/status';
 
 type ReportStatus = {
   job_id: string;
@@ -114,6 +115,7 @@ export function ProcessingPage() {
 
   const currentStage = statusSnapshot ? getStageIndex(statusSnapshot.stage) : 0;
   const percent = Math.round(((currentStage + 1) / stagedUpdates.length) * 100);
+  const humanStatus = statusSnapshot ? formatPipelineStatus(statusSnapshot.status, statusSnapshot.stage) : '';
 
   return (
     <StepShell
@@ -136,7 +138,7 @@ export function ProcessingPage() {
           <strong>{percent}% complete</strong>
           <span>
             {activeJobId ? `Tracking ${activeJobId}` : 'Waiting for job id'}
-            {statusSnapshot ? ` | stage: ${statusSnapshot.stage}` : ''}
+            {statusSnapshot ? ` | ${humanStatus}` : ''}
           </span>
         </div>
 
@@ -151,7 +153,7 @@ export function ProcessingPage() {
                   <strong>{stage}</strong>
                   <p>
                     {state === 'done' && 'Complete'}
-                    {state === 'active' && 'In progress'}
+                    {state === 'active' && (statusSnapshot ? formatPipelineStage(statusSnapshot.stage) : 'In progress')}
                     {state === 'queued' && 'Queued'}
                   </p>
                 </div>

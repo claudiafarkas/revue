@@ -5,12 +5,16 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from tasks.compare_resume import filter_meaningful_keywords, normalize_keyword
+
 logger = logging.getLogger(__name__)
 
 _GENERIC_POSTING_TERMS = {
+	"about",
 	"across",
 	"advantage",
 	"analytics",
+	"and/or",
 	"apply",
 	"are",
 	"based",
@@ -98,17 +102,8 @@ _TOOL_KEYWORDS = {
 
 def _filter_report_keywords(keywords: list[str]) -> list[str]:
 	"""Remove generic language so report sections use only meaningful keywords."""
-	seen: set[str] = set()
-	filtered: list[str] = []
-	for keyword in keywords:
-		cleaned = keyword.strip().lower()
-		if not cleaned or cleaned in seen or cleaned in _GENERIC_POSTING_TERMS:
-			continue
-		if len(cleaned) <= 2:
-			continue
-		seen.add(cleaned)
-		filtered.append(cleaned)
-	return filtered
+	filtered = filter_meaningful_keywords(keywords)
+	return [keyword for keyword in filtered if normalize_keyword(keyword) not in _GENERIC_POSTING_TERMS]
 
 
 def _select_common_tools(posting_keywords: list[str], matched_keywords: list[str]) -> list[str]:
@@ -192,6 +187,10 @@ def build_report_json(payload: dict[str, Any]) -> dict[str, Any]:
 	missing_keywords = list(comparison.get("missing_keywords", []))
 	resume_keywords = list(comparison.get("resume_keywords", []))
 	posting_keywords = list(comparison.get("posting_keywords", []))
+	matched_keywords = _filter_report_keywords(matched_keywords)
+	missing_keywords = _filter_report_keywords(missing_keywords)
+	resume_keywords = _filter_report_keywords(resume_keywords)
+	posting_keywords = _filter_report_keywords(posting_keywords)
 	common_tools = _select_common_tools(posting_keywords, matched_keywords)
 	common_achievements = _select_common_achievements(missing_keywords)
 	average_similarity = float(embedding_features.get("average_similarity", 0.0))

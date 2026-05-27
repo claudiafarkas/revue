@@ -19,6 +19,8 @@ import logging
 import os
 from typing import Any
 
+from tasks.compare_resume import filter_meaningful_keywords
+
 logger = logging.getLogger(__name__)
 
 _MAX_RESUME_CHARS = 4000
@@ -136,10 +138,15 @@ def analyze_with_llm(payload: dict[str, Any]) -> dict[str, Any]:
         logger.error("LLM returned a non-dict response; skipping LLM analysis")
         return payload
 
-    llm_matched = [s for s in result.get("matched_skills", []) if isinstance(s, str)]
-    llm_missing = [s for s in result.get("missing_skills", []) if isinstance(s, str)]
-    llm_posting_reqs = [s for s in result.get("posting_requirements", []) if isinstance(s, str)]
-    llm_resume_skills = [s for s in result.get("resume_skills", []) if isinstance(s, str)]
+    llm_matched_raw = [s for s in result.get("matched_skills", []) if isinstance(s, str)]
+    llm_missing_raw = [s for s in result.get("missing_skills", []) if isinstance(s, str)]
+    llm_posting_reqs_raw = [s for s in result.get("posting_requirements", []) if isinstance(s, str)]
+    llm_resume_skills_raw = [s for s in result.get("resume_skills", []) if isinstance(s, str)]
+
+    llm_matched = filter_meaningful_keywords(llm_matched_raw)
+    llm_missing = filter_meaningful_keywords(llm_missing_raw)
+    llm_posting_reqs = filter_meaningful_keywords(llm_posting_reqs_raw)
+    llm_resume_skills = filter_meaningful_keywords(llm_resume_skills_raw)
 
     logger.info(
         "Gemini analysis complete: job_id=%s matched=%d missing=%d resume_skills=%d posting_requirements=%d",

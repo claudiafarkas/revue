@@ -15,35 +15,79 @@ _TOKEN_RE = re.compile(r"[a-zA-Z][a-zA-Z0-9+.#/-]{1,}")
 # Small stopword set to keep baseline matching focused.
 _STOPWORDS = {
 	"a",
+	"able",
+	"about",
+	"across",
+	"aligned",
+	"about",
 	"an",
 	"and",
+	"and-or",
+	"and",
+	"and/or",
 	"any",
+	"appropriate",
 	"are",
 	"as",
 	"at",
+	"background",
 	"be",
+	"both",
 	"by",
 	"can",
+	"capable",
+	"candidate",
+	"candidates",
+	"collaborate",
+	"collaboration",
+	"communication",
+	"complex",
+	"demonstrated",
+	"demonstrates",
+	"demonstrating",
+	"design",
+	"develop",
+	"developed",
+	"developing",
 	"do",
 	"does",
 	"each",
+	"ensure",
+	"ensuring",
+	"etc",
+	"experience",
+	"familiar",
+	"familiarity",
 	"for",
 	"from",
 	"have",
 	"how",
 	"if",
+	"including",
 	"in",
 	"into",
 	"is",
 	"it",
 	"its",
+	"knowledge",
+	"maintain",
+	"maintaining",
+	"multiple",
 	"more",
 	"of",
 	"on",
 	"or",
+	"other",
 	"our",
 	"out",
 	"per",
+	"preferred",
+	"problem",
+	"problems",
+	"professional",
+	"relevant",
+	"responsible",
+	"role",
 	"than",
 	"that",
 	"the",
@@ -55,19 +99,60 @@ _STOPWORDS = {
 	"through",
 	"time",
 	"to",
+	"understanding",
 	"using",
+	"various",
 	"we",
+	"well",
 	"will",
 	"with",
+	"within",
 	"you",
 	"your",
 }
 
 
+def normalize_keyword(value: str) -> str:
+	"""Normalize raw keyword-like values before filtering and scoring."""
+	cleaned = value.strip().lower()
+	cleaned = cleaned.replace("&", "/")
+	cleaned = re.sub(r"\s+", " ", cleaned)
+	cleaned = re.sub(r"\b(and|or)\s*/\s*(and|or)\b", "and/or", cleaned)
+	cleaned = re.sub(r"\b(and|or)\s+(and|or)\b", "and/or", cleaned)
+	return cleaned
+
+
+def is_meaningful_keyword(value: str) -> bool:
+	"""Return True when a keyword should be included in scoring and report output."""
+	cleaned = normalize_keyword(value)
+	if len(cleaned) <= 2:
+		return False
+	if cleaned in _STOPWORDS:
+		return False
+	if cleaned.replace("/", "") in {"andor", "orand"}:
+		return False
+	return True
+
+
+def filter_meaningful_keywords(values: list[str]) -> list[str]:
+	"""Normalize, dedupe, and keep only meaningful keywords preserving first-seen order."""
+	seen: set[str] = set()
+	filtered: list[str] = []
+	for value in values:
+		cleaned = normalize_keyword(value)
+		if not is_meaningful_keyword(cleaned):
+			continue
+		if cleaned in seen:
+			continue
+		seen.add(cleaned)
+		filtered.append(cleaned)
+	return filtered
+
+
 def _tokenize(text: str) -> list[str]:
-	"""Tokenize text into lowercase keywords, excluding short stopwords."""
+	"""Tokenize text into lowercase keywords, excluding stopwords and filler compounds."""
 	tokens = [match.group(0).lower() for match in _TOKEN_RE.finditer(text)]
-	return [token for token in tokens if token not in _STOPWORDS and len(token) > 2]
+	return filter_meaningful_keywords(tokens)
 
 
 def summarize_top_keywords(text: str, limit: int = 25) -> list[str]:
