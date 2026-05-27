@@ -31,8 +31,10 @@ _GENERIC_POSTING_TERMS = {
 	"complex",
 	"culture",
 	"data",
+	"datasets",
 	"driven",
 	"engineer",
+	"engineering",
 	"experience",
 	"full",
 	"how",
@@ -52,6 +54,11 @@ _GENERIC_POSTING_TERMS = {
 	"product",
 	"ready",
 	"role",
+	"skills",
+	"solution",
+	"solutions",
+	"strategy",
+	"stakeholder",
 	"software",
 	"stakeholders",
 	"systems",
@@ -102,6 +109,42 @@ _TOOL_KEYWORDS = {
 	"warehouse",
 }
 
+_TECHNICAL_HINTS = {
+	"a/b",
+	"access",
+	"architecture",
+	"automation",
+	"backend",
+	"cloud",
+	"code",
+	"dashboard",
+	"database",
+	"devops",
+	"etl",
+	"integration",
+	"kpi",
+	"machine learning",
+	"ml",
+	"pipeline",
+	"pipelines",
+	"platform",
+	"python",
+	"sql",
+	"terraform",
+	"workflow",
+	"workflows",
+}
+
+
+def _score_keyword(keyword: str) -> tuple[int, int, str]:
+	"""Rank keywords by technical specificity, tool status, and length."""
+	cleaned = normalize_keyword(keyword)
+	is_tool = cleaned in _TOOL_KEYWORDS
+	is_hint = cleaned in _TECHNICAL_HINTS or any(char in cleaned for char in ("/", "+", ".", "#", "-"))
+	is_generic = cleaned in _GENERIC_POSTING_TERMS
+	priority = 0 if is_tool else 1 if is_hint else 3 if is_generic else 2
+	return (priority, -len(cleaned), cleaned)
+
 
 def _filter_report_keywords(keywords: list[str]) -> list[str]:
 	"""Remove generic language so report sections use only meaningful keywords."""
@@ -112,8 +155,7 @@ def _filter_report_keywords(keywords: list[str]) -> list[str]:
 def _select_common_tools(posting_keywords: list[str], matched_keywords: list[str]) -> list[str]:
 	"""Favor technical or tool-like terms over generic recruiting language."""
 	candidates = _filter_report_keywords(posting_keywords + [keyword for keyword in matched_keywords if keyword not in posting_keywords])
-	preferred = [keyword for keyword in candidates if keyword in _TOOL_KEYWORDS or any(char in keyword for char in ("/", "+", ".", "#", "-"))]
-	ordered = preferred if preferred else candidates
+	ordered = sorted(candidates, key=_score_keyword)
 	return ordered[:12]
 
 
