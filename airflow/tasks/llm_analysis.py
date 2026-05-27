@@ -19,7 +19,10 @@ import logging
 import os
 from typing import Any
 
-from tasks.compare_resume import filter_meaningful_keywords
+try:
+    from tasks.compare_resume import filter_meaningful_keywords
+except ModuleNotFoundError:  # pragma: no cover - supports local direct imports
+    from .compare_resume import filter_meaningful_keywords
 
 logger = logging.getLogger(__name__)
 

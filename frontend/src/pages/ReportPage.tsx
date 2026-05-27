@@ -6,6 +6,72 @@ import { useRevue } from '../context/RevueContext';
 import { getApiBaseUrl, readJsonResponse } from '../utils/api';
 import { formatPipelineStatus } from '../utils/status';
 
+const REPORT_STOPWORDS = new Set([
+  'a',
+  'about',
+  'across',
+  'an',
+  'and',
+  'and/or',
+  'are',
+  'as',
+  'at',
+  'be',
+  'by',
+  'can',
+  'complex',
+  'develop',
+  'ensure',
+  'experience',
+  'familiarity',
+  'for',
+  'from',
+  'in',
+  'into',
+  'is',
+  'it',
+  'more',
+  'of',
+  'on',
+  'or',
+  'the',
+  'their',
+  'these',
+  'this',
+  'to',
+  'using',
+  'with',
+]);
+
+function cleanReportKeyword(keyword: string): string {
+  return keyword.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function filterReportKeywords(keywords: string[]): string[] {
+  const seen = new Set<string>();
+  const filtered: string[] = [];
+
+  for (const keyword of keywords) {
+    const cleaned = cleanReportKeyword(keyword);
+    if (!cleaned || cleaned.length <= 2) {
+      continue;
+    }
+    if (REPORT_STOPWORDS.has(cleaned)) {
+      continue;
+    }
+    if (cleaned.replace(/[\s/-]/g, '') === 'andor') {
+      continue;
+    }
+    if (seen.has(cleaned)) {
+      continue;
+    }
+    seen.add(cleaned);
+    filtered.push(cleaned);
+  }
+
+  return filtered;
+}
+
 type DomainMatch = {
   domain: string;
   confidence: number;
@@ -121,13 +187,13 @@ function buildSections(content: ReportContent | null): RenderSection[] {
   const highlights = content.report_json.highlights || {};
   const recommendations = content.report_json.recommendations || [];
   const narrative = content.report_json.narrative;
-  const commonTools = (highlights.common_tools || []).slice(0, 12);
-  const commonAchievements = (highlights.common_achievements || []).slice(0, 12);
-  const postingKeywords = (highlights.posting_keywords || []).slice(0, 10);
-  const resumeKeywords = (highlights.resume_keywords || []).slice(0, 10);
+  const commonTools = filterReportKeywords(highlights.common_tools || []).slice(0, 12);
+  const commonAchievements = filterReportKeywords(highlights.common_achievements || []).slice(0, 12);
+  const postingKeywords = filterReportKeywords(highlights.posting_keywords || []).slice(0, 10);
+  const resumeKeywords = filterReportKeywords(highlights.resume_keywords || []).slice(0, 10);
 
-  const matched = (highlights.matched_keywords || []).slice(0, 12);
-  const missing = (highlights.missing_keywords || []).slice(0, 12);
+  const matched = filterReportKeywords(highlights.matched_keywords || []).slice(0, 12);
+  const missing = filterReportKeywords(highlights.missing_keywords || []).slice(0, 12);
 
   const topPostingSignals = commonTools.length ? commonTools : postingKeywords.length ? postingKeywords : [...matched, ...missing].slice(0, 10);
   const differentiators = matched.length ? matched : resumeKeywords.slice(0, 8);

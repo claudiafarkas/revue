@@ -5,7 +5,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from tasks.compare_resume import filter_meaningful_keywords, normalize_keyword
+try:
+	from tasks.compare_resume import filter_meaningful_keywords, normalize_keyword
+except ModuleNotFoundError:  # pragma: no cover - supports local direct imports
+	from .compare_resume import filter_meaningful_keywords, normalize_keyword
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +126,36 @@ def _looks_like_rewrite_recommendation(item: str) -> bool:
 	"""Detect whether a recommendation includes a concrete before/after rewrite."""
 	text = item.lower()
 	return "rewrite" in text and "->" in text
+
+
+
+def _clean_string_list(values: Any) -> list[str]:
+	"""Return a sanitized, deduplicated list of meaningful strings."""
+	if not isinstance(values, list):
+		return []
+	filtered = filter_meaningful_keywords([value for value in values if isinstance(value, str)])
+	return [keyword for keyword in filtered if normalize_keyword(keyword) not in _GENERIC_POSTING_TERMS]
+
+
+def _sanitize_report_json(report_json: dict[str, Any]) -> dict[str, Any]:
+	"""Remove filler terms from all keyword-bearing sections before persistence."""
+	sanitized = dict(report_json)
+	highlights = dict(sanitized.get("highlights", {}))
+	for key in (
+		"common_tools",
+		"common_achievements",
+		"matched_keywords",
+		"missing_keywords",
+		"resume_keywords",
+		"posting_keywords",
+	):
+		highlights[key] = _clean_string_list(highlights.get(key, []))
+	sanitized["highlights"] = highlights
+
+	if isinstance(sanitized.get("recommendations"), list):
+		sanitized["recommendations"] = [item for item in sanitized["recommendations"] if isinstance(item, str) and item.strip()]
+
+	return sanitized
 
 
 def _build_recommendations(missing_keywords: list[str], resume_keywords: list[str]) -> list[str]:
@@ -260,6 +293,8 @@ def build_report_json(payload: dict[str, Any]) -> dict[str, Any]:
 
 	if llm_available:
 		report_json["narrative"] = _build_narrative(llm_analysis)
+
+	report_json = _sanitize_report_json(report_json)
 
 	logger.info("Built report JSON: job_id=%s keys=%s llm_available=%s", job_id, sorted(report_json.keys()), llm_available)
 	return report_json
