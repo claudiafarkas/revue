@@ -43,6 +43,42 @@ const REPORT_STOPWORDS = new Set([
   'with',
 ]);
 
+const TOOL_KEYWORDS = new Set([
+  'airflow',
+  'api',
+  'apis',
+  'aws',
+  'azure',
+  'bigquery',
+  'ci/cd',
+  'docker',
+  'etl',
+  'fastapi',
+  'gcp',
+  'github',
+  'gitlab',
+  'java',
+  'jira',
+  'kafka',
+  'kubernetes',
+  'looker',
+  'mysql',
+  'nextjs',
+  'node',
+  'postgres',
+  'postgresql',
+  'python',
+  'react',
+  'redis',
+  'snowflake',
+  'spark',
+  'sql',
+  'tableau',
+  'terraform',
+  'typescript',
+  'warehouse',
+]);
+
 function cleanReportKeyword(keyword: string): string {
   return keyword.trim().toLowerCase().replace(/\s+/g, ' ');
 }
@@ -70,6 +106,26 @@ function filterReportKeywords(keywords: string[]): string[] {
   }
 
   return filtered;
+}
+
+function selectSectionTwoSignals(highlights: ReportContent['report_json']['highlights']): string[] {
+  const commonTools = filterReportKeywords(highlights?.common_tools || []).filter((keyword) => TOOL_KEYWORDS.has(keyword));
+  const postingKeywords = filterReportKeywords(highlights?.posting_keywords || []).filter((keyword) => TOOL_KEYWORDS.has(keyword));
+  const matchedKeywords = filterReportKeywords(highlights?.matched_keywords || []).filter((keyword) => TOOL_KEYWORDS.has(keyword));
+
+  const candidates = [...commonTools, ...postingKeywords, ...matchedKeywords];
+  const seen = new Set<string>();
+  const selected: string[] = [];
+
+  for (const keyword of candidates) {
+    if (seen.has(keyword)) {
+      continue;
+    }
+    seen.add(keyword);
+    selected.push(keyword);
+  }
+
+  return selected.slice(0, 10);
 }
 
 type DomainMatch = {
@@ -187,7 +243,7 @@ function buildSections(content: ReportContent | null): RenderSection[] {
   const highlights = content.report_json.highlights || {};
   const recommendations = content.report_json.recommendations || [];
   const narrative = content.report_json.narrative;
-  const commonTools = filterReportKeywords(highlights.common_tools || []).slice(0, 12);
+  const commonTools = selectSectionTwoSignals(highlights);
   const commonAchievements = filterReportKeywords(highlights.common_achievements || []).slice(0, 12);
   const postingKeywords = filterReportKeywords(highlights.posting_keywords || []).slice(0, 10);
   const resumeKeywords = filterReportKeywords(highlights.resume_keywords || []).slice(0, 10);
@@ -195,7 +251,7 @@ function buildSections(content: ReportContent | null): RenderSection[] {
   const matched = filterReportKeywords(highlights.matched_keywords || []).slice(0, 12);
   const missing = filterReportKeywords(highlights.missing_keywords || []).slice(0, 12);
 
-  const topPostingSignals = commonTools.length ? commonTools : postingKeywords.length ? postingKeywords : [...matched, ...missing].slice(0, 10);
+  const topPostingSignals = commonTools.length ? commonTools : filterReportKeywords([...postingKeywords, ...matched]).filter((keyword) => TOOL_KEYWORDS.has(keyword)).slice(0, 10);
   const differentiators = matched.length ? matched : resumeKeywords.slice(0, 8);
 
   const experienceNote =
