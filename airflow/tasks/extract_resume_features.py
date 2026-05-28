@@ -49,6 +49,66 @@ _STOPWORDS = {
     "with",
 }
 
+_GENERIC_JOB_TOKENS = {
+    "about",
+    "across",
+    "build",
+    "business",
+    "communication",
+    "complex",
+    "data",
+    "develop",
+    "engineering",
+    "ensure",
+    "experience",
+    "familiarity",
+    "maintain",
+    "multiple",
+    "quality",
+    "role",
+    "skills",
+    "stakeholder",
+    "stakeholders",
+    "strong",
+    "systems",
+    "tools",
+    "work",
+    "working",
+}
+
+_TECH_TOOL_HINTS = {
+    "airflow",
+    "api",
+    "aws",
+    "azure",
+    "bigquery",
+    "databricks",
+    "docker",
+    "fastapi",
+    "gcp",
+    "github",
+    "gitlab",
+    "java",
+    "kafka",
+    "kubernetes",
+    "looker",
+    "mysql",
+    "nextjs",
+    "node",
+    "postgres",
+    "postgresql",
+    "python",
+    "react",
+    "redis",
+    "snowflake",
+    "spark",
+    "sql",
+    "tableau",
+    "terraform",
+    "typescript",
+    "warehouse",
+}
+
 _DEFAULT_HINTS = {
     "transferable": {
         "communication",
@@ -102,7 +162,17 @@ _SKILL_HINTS_CONFIG = _load_skill_hints()
 
 def _tokenize(text: str) -> list[str]:
     tokens = [m.group(0).lower() for m in _TOKEN_RE.finditer(text)]
-    return [token for token in tokens if token not in _STOPWORDS and len(token) > 2]
+    filtered: list[str] = []
+    for token in tokens:
+        if len(token) <= 2 or token in _STOPWORDS:
+            continue
+        if token.replace("/", "") in {"andor", "orand"}:
+            continue
+        if token in _GENERIC_JOB_TOKENS:
+            continue
+        if token in _TECH_TOOL_HINTS or any(char.isalpha() for char in token):
+            filtered.append(token)
+    return filtered
 
 
 def _detect_domains(tokens: set[str], domain_hints: dict[str, set[str]]) -> list[dict[str, Any]]:

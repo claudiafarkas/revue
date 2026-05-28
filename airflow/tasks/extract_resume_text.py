@@ -3,11 +3,38 @@
 import io
 import logging
 import os
+import re
 
 import psycopg
 from pypdf import PdfReader
 
 logger = logging.getLogger(__name__)
+
+_WHITESPACE_RE = re.compile(r"\s+")
+
+
+def _clean_extracted_page_text(text: str) -> str:
+    """Normalize page text while preserving line structure from PDFs."""
+    if not text:
+        return ""
+    text = text.replace("\u00ad", "")
+    text = text.replace("|", " ")
+    text = _WHITESPACE_RE.sub(" ", text)
+    return text.strip()
+
+
+def _extract_text_from_reader(reader: PdfReader) -> str:
+    """Extract text from each page and fall back to raw layout-friendly text if needed."""
+    page_texts: list[str] = []
+    for page in reader.pages:
+        text = page.extract_text() or ""
+        if not text:
+            try:
+                text = page.extract_text(extraction_mode="layout") or ""
+            except TypeError:
+                text = page.extract_text() or ""
+        page_texts.append(_clean_extracted_page_text(text))
+    return "\n".join(text for text in page_texts if text).strip()
 
 
 def _connection_string(mask_password: bool = False) -> str:
@@ -56,12 +83,12 @@ def load_resume_text(job_id: str) -> str:
     pdf_bytes = row[0]
     logger.info("Resume bytes loaded: job_id=%s byte_count=%d", job_id, len(pdf_bytes))
     reader = PdfReader(io.BytesIO(pdf_bytes))
-    pages = [page.extract_text() or "" for page in reader.pages]
-    resume_text = "\n".join(pages).strip()
+    pages = len(reader.pages)
+    resume_text = _extract_text_from_reader(reader)
 
     if not resume_text:
-        logger.error("Resume text extraction produced empty text: job_id=%s page_count=%d", job_id, len(pages))
+        logger.error("Resume text extraction produced empty text: job_id=%s page_count=%d", job_id, pages)
         raise ValueError(f"Resume PDF had no extractable text for job_id '{job_id}'.")
 
-    logger.info("Resume text extracted: job_id=%s page_count=%d char_count=%d", job_id, len(pages), len(resume_text))
+    logger.info("Resume text extracted: job_id=%s page_count=%d char_count=%d", job_id, pages, len(resume_text))
     return resume_text
