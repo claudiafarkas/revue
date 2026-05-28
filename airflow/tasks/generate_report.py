@@ -292,6 +292,23 @@ def _filter_gap_keywords(missing_keywords: list[str]) -> list[str]:
 	return [keyword for keyword in filtered if keyword not in _LOW_SIGNAL_GAP_TERMS]
 
 
+def _recompute_match_score(matched_keywords: list[str], missing_keywords: list[str]) -> float:
+	"""Recalculate match score from final post-filter keyword sets."""
+	matched_count = len(set(matched_keywords))
+	missing_count = len(set(missing_keywords))
+	denominator = max(matched_count + missing_count, 1)
+	return round(matched_count / denominator, 3)
+
+
+def _compute_tool_overlap_score(tool_keywords: list[str], resume_tools: list[str]) -> float:
+	"""Compute tool overlap as a bounded ratio for summary calibration."""
+	tool_set = set(tool_keywords)
+	if not tool_set:
+		return 0.0
+	resume_set = set(resume_tools)
+	return round(len(tool_set & resume_set) / len(tool_set), 3)
+
+
 def _looks_like_rewrite_recommendation(item: str) -> bool:
 	"""Detect whether a recommendation includes a concrete before/after rewrite."""
 	text = item.lower()
@@ -416,6 +433,10 @@ def build_report_json(payload: dict[str, Any]) -> dict[str, Any]:
 	common_tools = tool_keywords[:12] if tool_keywords else _select_common_tools(posting_keywords, matched_keywords)
 	common_achievements = _select_common_achievements(missing_keywords)
 	average_similarity = float(embedding_features.get("average_similarity", 0.0))
+	match_score = _recompute_match_score(matched_keywords, missing_keywords)
+	tool_overlap_score = _compute_tool_overlap_score(tool_keywords, resume_tools)
+	# Blend lexical embedding and explicit tool overlap so Fit Overview tracks actual requirement coverage.
+	embedding_similarity = round((average_similarity * 0.75) + (tool_overlap_score * 0.25), 3)
 
 	# Use GPT fit label when available; it has richer context than the score threshold.
 	if llm_available and llm_analysis.get("overview"):
@@ -447,12 +468,14 @@ def build_report_json(payload: dict[str, Any]) -> dict[str, Any]:
 	recommendations = recommendations[:7]
 
 	logger.info(
-		"Building report JSON: job_id=%s match_score=%s matched=%d missing=%d embedding_similarity=%s llm_available=%s",
+		"Building report JSON: job_id=%s match_score=%s matched=%d missing=%d embedding_similarity=%s base_embedding=%s tool_overlap=%s llm_available=%s",
 		job_id,
 		match_score,
 		len(matched_keywords),
 		len(missing_keywords),
+		embedding_similarity,
 		average_similarity,
+		tool_overlap_score,
 		llm_available,
 	)
 
@@ -460,7 +483,7 @@ def build_report_json(payload: dict[str, Any]) -> dict[str, Any]:
 		"job_id": job_id,
 		"summary": {
 			"match_score": round(match_score, 3),
-			"embedding_similarity": round(average_similarity, 3),
+			"embedding_similarity": embedding_similarity,
 			"fit_label": fit_label,
 		},
 		"highlights": {
