@@ -163,17 +163,40 @@ _TOOL_ALIASES: dict[str, tuple[str, ...]] = {
 	"kubernetes": ("kubernetes", "k8s"),
 }
 
+_LOW_SIGNAL_GAP_TERMS = {
+	"actionable",
+	"agile",
+	"analysts",
+	"built",
+	"centralized",
+	"citco",
+	"collaborating",
+	"contributing",
+	"controls",
+	"enterprise",
+	"financial",
+	"future",
+	"initiatives",
+	"junior",
+	"maintain",
+	"multiple",
+	"power",
+	"process",
+	"processes",
+	"strong",
+}
+
 
 def _normalize_keyword_candidates(keywords: list[str]) -> list[str]:
 	"""Normalize and keep only meaningful keywords in original order."""
 	return filter_meaningful_keywords(keywords)
 
 
-def _extract_tools_from_postings(postings: list[str]) -> list[str]:
-	"""Extract canonical tool keywords directly from raw posting text."""
-	if not postings:
+def _extract_tools_from_text(text: str) -> list[str]:
+	"""Extract canonical tool keywords directly from free-form text."""
+	if not text:
 		return []
-	text = "\n".join(postings).lower()
+	text = text.lower()
 	selected: list[str] = []
 	for canonical, aliases in _TOOL_ALIASES.items():
 		for alias in aliases:
@@ -191,6 +214,13 @@ def _extract_tools_from_postings(postings: list[str]) -> list[str]:
 		seen.add(keyword)
 		ordered.append(keyword)
 	return ordered
+
+
+def _extract_tools_from_postings(postings: list[str]) -> list[str]:
+	"""Extract canonical tool keywords directly from raw posting text."""
+	if not postings:
+		return []
+	return _extract_tools_from_text("\n".join(postings))
 
 
 def _select_tools_from_posting(posting_keywords: list[str]) -> list[str]:
@@ -249,7 +279,17 @@ def _select_common_tools(posting_keywords: list[str], matched_keywords: list[str
 
 def _select_common_achievements(missing_keywords: list[str]) -> list[str]:
 	"""Return filtered achievement and emphasis gaps without filler words."""
-	return [keyword for keyword in _filter_report_keywords(missing_keywords) if keyword not in _TOOL_KEYWORDS][:12]
+	return [
+		keyword
+		for keyword in _filter_report_keywords(missing_keywords)
+		if keyword not in _TOOL_KEYWORDS and keyword not in _LOW_SIGNAL_GAP_TERMS
+	][:12]
+
+
+def _filter_gap_keywords(missing_keywords: list[str]) -> list[str]:
+	"""Keep under-emphasized terms focused on actionable technical gaps."""
+	filtered = _filter_report_keywords(missing_keywords)
+	return [keyword for keyword in filtered if keyword not in _LOW_SIGNAL_GAP_TERMS]
 
 
 def _looks_like_rewrite_recommendation(item: str) -> bool:
@@ -339,6 +379,10 @@ def build_report_json(payload: dict[str, Any]) -> dict[str, Any]:
 	if not isinstance(resume_features, dict):
 		raise TypeError("'resume_features' must be a dict")
 
+	resume_text = payload.get("resume_text", "")
+	if not isinstance(resume_text, str):
+		raise TypeError("'resume_text' must be a string")
+
 	postings = payload.get("postings", [])
 	if not isinstance(postings, list) or not all(isinstance(item, str) for item in postings):
 		raise TypeError("'postings' must be a list[str]")
@@ -356,10 +400,15 @@ def build_report_json(payload: dict[str, Any]) -> dict[str, Any]:
 	resume_keywords = list(comparison.get("resume_keywords", []))
 	posting_keywords = list(comparison.get("posting_keywords", []))
 	matched_keywords = _filter_report_keywords(matched_keywords)
-	missing_keywords = _filter_report_keywords(missing_keywords)
+	missing_keywords = _filter_gap_keywords(missing_keywords)
 	resume_keywords = _filter_report_keywords(resume_keywords)
 	posting_keywords = _filter_report_keywords(posting_keywords)
 	tool_keywords = _extract_tools_from_postings(postings)
+	resume_tools = _extract_tools_from_text(resume_text)
+	shared_tools = [keyword for keyword in tool_keywords if keyword in set(resume_tools)]
+	if shared_tools:
+		matched_keywords = _filter_report_keywords([*matched_keywords, *shared_tools])
+		missing_keywords = [keyword for keyword in missing_keywords if keyword not in set(shared_tools)]
 	if not tool_keywords:
 		tool_keywords = _select_tools_from_posting(posting_keywords)
 	if not tool_keywords:
