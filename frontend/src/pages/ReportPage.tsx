@@ -255,25 +255,25 @@ const FIT_BANDS: FitBand[] = [
     label: 'Limited',
     minMatchScore: 0,
     minEmbeddingSimilarity: 0,
-    guidance: 'Start with the highest-frequency requirements and add clear evidence of direct experience.',
+    guidance: 'Start with the top requirement gaps and add direct, evidence-backed bullets for each one.',
   },
   {
     label: 'Emerging',
-    minMatchScore: 0.15,
-    minEmbeddingSimilarity: 0.2,
-    guidance: 'Start by adding 3-5 missing requirements with concrete, evidence-backed bullets.',
+    minMatchScore: 0.25,
+    minEmbeddingSimilarity: 0.5,
+    guidance: 'You have partial overlap. Prioritize requirement language and add measurable outcomes for each missing signal.',
   },
   {
     label: 'Moderate',
     minMatchScore: 0.4,
-    minEmbeddingSimilarity: 0.45,
-    guidance: 'Tighten alignment language and increase measurable outcomes tied to required tools.',
+    minEmbeddingSimilarity: 0.62,
+    guidance: 'Good baseline alignment. Tighten phrasing to mirror requirements and deepen proof for your key tools.',
   },
   {
     label: 'Strong',
-    minMatchScore: 0.65,
-    minEmbeddingSimilarity: 0.65,
-    guidance: 'Maintain role alignment and tailor top achievements to each posting for final polish.',
+    minMatchScore: 0.58,
+    minEmbeddingSimilarity: 0.74,
+    guidance: 'Strong fit. Focus on role-specific tailoring and quantifiable impact to maximize competitiveness.',
   },
 ];
 
@@ -328,7 +328,7 @@ function buildSections(content: ReportContent | null): RenderSection[] {
 
   const overviewText =
     narrative?.overview ||
-    `Overall fit currently reads as ${summary.fit_label || 'n/a'}, with a match score of ${toPercent(summary.match_score)} and an embedding similarity of ${toPercent(summary.embedding_similarity)}.${differentiators.length ? ` The strongest overlap appears in ${differentiators.slice(0, 6).join(', ')}.` : ''}${experienceNote}`;
+    `Overall fit currently reads as ${summary.fit_label || 'n/a'}, with a match score of ${toPercent(summary.match_score)} and an alignment similarity of ${toPercent(summary.embedding_similarity)}.${differentiators.length ? ` The strongest overlap appears in ${differentiators.slice(0, 6).join(', ')}.` : ''}${experienceNote}`;
 
   const alignmentSummary = `${overviewText}\n\n${buildSignalInterpretation(matchScore, embeddingSimilarity)}`;
 
@@ -446,15 +446,15 @@ function buildLegendGuidance(
   const neededEmbedding = Math.max(0, nextBand.minEmbeddingSimilarity - scores.embeddingSimilarity);
 
   if (neededMatch > 0 && neededEmbedding > 0) {
-    return `To reach ${nextBand.label}, aim for roughly ${Math.round(nextBand.minMatchScore * 100)}%+ Match Score and ${Math.round(nextBand.minEmbeddingSimilarity * 100)}%+ Embedding Similarity.`;
+    return `To reach ${nextBand.label}, aim for roughly ${Math.round(nextBand.minMatchScore * 100)}%+ Match Score and ${Math.round(nextBand.minEmbeddingSimilarity * 100)}%+ Alignment Similarity.`;
   }
 
   if (neededMatch > 0) {
-    return `You already meet the ${nextBand.label} Embedding Similarity threshold. To reach ${nextBand.label} overall, raise Match Score from ${Math.round(scores.matchScore * 100)}% to about ${Math.round(nextBand.minMatchScore * 100)}%+ by aligning more exact requirement language.`;
+    return `You already meet the ${nextBand.label} Alignment Similarity threshold. To reach ${nextBand.label} overall, raise Match Score from ${Math.round(scores.matchScore * 100)}% to about ${Math.round(nextBand.minMatchScore * 100)}%+ by aligning more exact requirement language.`;
   }
 
   if (neededEmbedding > 0) {
-    return `You already meet the ${nextBand.label} Match Score threshold. To reach ${nextBand.label} overall, raise Embedding Similarity from ${Math.round(scores.embeddingSimilarity * 100)}% to about ${Math.round(nextBand.minEmbeddingSimilarity * 100)}%+ by expanding role-context narrative around your existing skills.`;
+    return `You already meet the ${nextBand.label} Match Score threshold. To reach ${nextBand.label} overall, raise Alignment Similarity from ${Math.round(scores.embeddingSimilarity * 100)}% to about ${Math.round(nextBand.minEmbeddingSimilarity * 100)}%+ by expanding role-context evidence around your existing skills and tools.`;
   }
 
   return `${activeBand.guidance}`;
@@ -470,22 +470,22 @@ function buildSignalInterpretation(matchScore: number, embeddingSimilarity: numb
   const simPct = Math.round(embeddingSimilarity * 100);
 
   if (lowMatch && highSimilarity) {
-    return `A ${matchPct}% Match Score alongside ${simPct}% Embedding Similarity tells you your resume is written in the same general professional vocabulary as these job postings, but it doesn't echo the specific high-frequency keywords they prioritize. This usually means you're using synonyms, alternate phrasings, or describing responsibilities differently than the job descriptions phrase their requirements. Review the missing keywords below and add them wherever they genuinely apply.`;
+    return `A ${matchPct}% Match Score alongside ${simPct}% Alignment Similarity suggests your experience context is close, but explicit requirement-language coverage is still thin. Review missing keywords and mirror exact requirement phrasing where it genuinely matches your background.`;
   }
   if (highMatch && highSimilarity) {
-    return `A ${matchPct}% Match Score and ${simPct}% Embedding Similarity is a strong result. Your resume closely mirrors both the specific keywords and the overall vocabulary of these postings — your language and emphasis are well-calibrated to this target. Focus on depth and quantifiable evidence rather than broad keyword coverage.`;
+    return `A ${matchPct}% Match Score and ${simPct}% Alignment Similarity is a strong result. You are matching both explicit requirements and broader role context. Focus on impact depth and quantified outcomes instead of adding more keywords.`;
   }
   if (highMatch && lowSimilarity) {
-    return `A ${matchPct}% Match Score with only ${simPct}% Embedding Similarity is an unusual combination. You're hitting several of the right keywords, but the overall shape of your resume's vocabulary diverges from these postings. This can happen when key terms are listed without the surrounding context those roles typically carry. Consider expanding the narrative around your skills, not just the terms themselves.`;
+    return `A ${matchPct}% Match Score with only ${simPct}% Alignment Similarity means you hit many required terms, but supporting context is thin. Add stronger role-specific examples around those keywords to improve credibility.`;
   }
   if (lowMatch && lowSimilarity) {
-    return `A ${matchPct}% Match Score and ${simPct}% Embedding Similarity indicates limited overlap with both the specific keywords and the general vocabulary of these postings. The role may require a meaningfully different skill set or domain language from what's currently reflected in your resume. The missing keywords section is the best place to start.`;
+    return `A ${matchPct}% Match Score and ${simPct}% Alignment Similarity indicates limited overlap in both requirements and context. Start with the highest-value missing requirements and add direct project evidence for each.`;
   }
   // Moderate zone
   if (matchScore >= 0.25 && embeddingSimilarity >= 0.35) {
-    return `A ${matchPct}% Match Score and ${simPct}% Embedding Similarity shows reasonable alignment — your vocabulary is in the right territory but there's room to strengthen keyword coverage. Prioritize the missing keywords that appear most often across the postings, and make sure your resume reflects them in context, not just as isolated terms.`;
+    return `A ${matchPct}% Match Score and ${simPct}% Alignment Similarity shows reasonable alignment. Prioritize missing high-signal requirements and strengthen each with tool + scope + metric evidence.`;
   }
-  return `Match Score: ${matchPct}%, Embedding Similarity: ${simPct}%. Review the missing keywords and Fit Legend below for guidance on where to focus.`;
+  return `Match Score: ${matchPct}%, Alignment Similarity: ${simPct}%. Review the missing keywords and Fit Legend below for guidance on where to focus.`;
 }
 
 function buildPreviewHtml(content: ReportContent | null): string {
@@ -509,7 +509,7 @@ function buildPreviewHtml(content: ReportContent | null): string {
         <p style="margin:0;font-size:28px;font-weight:700;">${fitLabel}</p>
       </div>
       <div style="flex:1;padding:16px;border:1px solid #e1d6c3;border-radius:8px;">
-        <p style="margin:0 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:#5b6662;">Embedding Similarity</p>
+        <p style="margin:0 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:#5b6662;">Alignment Similarity</p>
         <p style="margin:0;font-size:28px;font-weight:700;">${embeddingSimilarity}</p>
       </div>
     </div>`;
@@ -690,9 +690,9 @@ export function ReportPage() {
               <span>Qualitative fit based on current resume signals.</span>
             </article>
             <article className="report-metric-card report-metric-card--feature">
-              <p>Embedding Similarity</p>
+              <p>Alignment Similarity</p>
               <strong>{reportSummary.embeddingSimilarity}</strong>
-              <span>Semantic similarity across the combined postings.</span>
+              <span>Blended similarity across requirement language and tool overlap.</span>
             </article>
           </div>
           <div className="report-fit-legend" aria-label="Fit scoring legend">
@@ -700,7 +700,7 @@ export function ReportPage() {
               <p className="eyebrow">Fit Legend</p>
               <div className="report-fit-legend__summary-row">
                 <p>
-                  Fit Level combines Match Score + Embedding Similarity.
+                  Fit Level combines Match Score + Alignment Similarity.
                 </p>
                 <button
                   type="button"
@@ -722,7 +722,7 @@ export function ReportPage() {
                     <span>{Math.round(fitScores.matchScore * 100)}%</span>
                   </p>
                   <p className="report-fit-legend__axis-item">
-                    <span className="report-fit-legend__axis-label">Semantic Track</span>
+                    <span className="report-fit-legend__axis-label">Alignment Track</span>
                     <strong>{embeddingBand.label}</strong>
                     <span>{Math.round(fitScores.embeddingSimilarity * 100)}%</span>
                   </p>
@@ -738,7 +738,7 @@ export function ReportPage() {
                           <span>{Math.round(band.minMatchScore * 100)}%+</span>
                         </p>
                         <p className="report-fit-band__metric">
-                          <span>Embedding Similarity:</span>
+                          <span>Alignment Similarity:</span>
                           <span>{Math.round(band.minEmbeddingSimilarity * 100)}%+</span>
                         </p>
                       </article>
