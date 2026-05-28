@@ -50,6 +50,8 @@ const TOOL_KEYWORDS = new Set([
   'aws',
   'azure',
   'bigquery',
+  'dbt',
+  'dagster',
   'ci/cd',
   'docker',
   'etl',
@@ -67,6 +69,7 @@ const TOOL_KEYWORDS = new Set([
   'node',
   'postgres',
   'postgresql',
+  'redshift',
   'python',
   'react',
   'redis',
@@ -93,6 +96,8 @@ const TOOL_KEYWORDS = new Set([
   'postgres',
   'aws',
   'serverless compute',
+  'serverless functions',
+  'relational databases',
   'jenkins',
   'restful apis',
   'docker',
@@ -158,12 +163,16 @@ function filterReportKeywords(keywords: string[]): string[] {
 }
 
 function selectSectionTwoSignals(highlights: ReportContent['report_json']['highlights']): string[] {
-  const explicitTools = filterReportKeywords(highlights?.tool_keywords || []).filter((keyword) => TOOL_KEYWORDS.has(keyword));
+  const explicitTools = filterReportKeywords(highlights?.tool_keywords || []);
   if (explicitTools.length) {
     return explicitTools.slice(0, 10);
   }
 
-  const commonTools = filterReportKeywords(highlights?.common_tools || []).filter((keyword) => TOOL_KEYWORDS.has(keyword));
+  const commonTools = filterReportKeywords(highlights?.common_tools || []);
+  if (commonTools.length) {
+    return commonTools.slice(0, 10);
+  }
+
   const postingKeywords = filterReportKeywords(highlights?.posting_keywords || []).filter((keyword) => TOOL_KEYWORDS.has(keyword));
   const matchedKeywords = filterReportKeywords(highlights?.matched_keywords || []).filter((keyword) => TOOL_KEYWORDS.has(keyword));
 

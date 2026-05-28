@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 try:
@@ -139,10 +140,57 @@ _TECHNICAL_HINTS = {
 	"workflows",
 }
 
+_TOOL_ALIASES: dict[str, tuple[str, ...]] = {
+	"airflow": ("airflow", "apache airflow"),
+	"dagster": ("dagster",),
+	"dbt": ("dbt",),
+	"docker": ("docker", "containerized applications", "containerized"),
+	"python": ("python",),
+	"sql": ("sql", "spark sql", "query authoring"),
+	"snowflake": ("snowflake",),
+	"redshift": ("redshift",),
+	"bigquery": ("bigquery",),
+	"aws": ("aws",),
+	"azure": ("azure",),
+	"gcp": ("gcp", "google cloud"),
+	"api": ("api", "apis", "restful apis", "rest api", "restful api"),
+	"etl": ("etl", "elt"),
+	"postgres": ("postgres", "postgresql"),
+	"mysql": ("mysql",),
+	"spark": ("spark",),
+	"kafka": ("kafka",),
+	"terraform": ("terraform",),
+	"kubernetes": ("kubernetes", "k8s"),
+}
+
 
 def _normalize_keyword_candidates(keywords: list[str]) -> list[str]:
 	"""Normalize and keep only meaningful keywords in original order."""
 	return filter_meaningful_keywords(keywords)
+
+
+def _extract_tools_from_postings(postings: list[str]) -> list[str]:
+	"""Extract canonical tool keywords directly from raw posting text."""
+	if not postings:
+		return []
+	text = "\n".join(postings).lower()
+	selected: list[str] = []
+	for canonical, aliases in _TOOL_ALIASES.items():
+		for alias in aliases:
+			pattern = rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])"
+			if re.search(pattern, text):
+				selected.append(canonical)
+				break
+
+	# Keep deterministic order with allowlist precedence.
+	ordered: list[str] = []
+	seen: set[str] = set()
+	for keyword in selected:
+		if keyword in seen:
+			continue
+		seen.add(keyword)
+		ordered.append(keyword)
+	return ordered
 
 
 def _select_tools_from_posting(posting_keywords: list[str]) -> list[str]:
@@ -225,6 +273,7 @@ def _sanitize_report_json(report_json: dict[str, Any]) -> dict[str, Any]:
 	highlights = dict(sanitized.get("highlights", {}))
 	for key in (
 		"common_tools",
+		"tool_keywords",
 		"common_achievements",
 		"matched_keywords",
 		"missing_keywords",
@@ -290,6 +339,10 @@ def build_report_json(payload: dict[str, Any]) -> dict[str, Any]:
 	if not isinstance(resume_features, dict):
 		raise TypeError("'resume_features' must be a dict")
 
+	postings = payload.get("postings", [])
+	if not isinstance(postings, list) or not all(isinstance(item, str) for item in postings):
+		raise TypeError("'postings' must be a list[str]")
+
 	embedding_features = payload.get("embedding_features", {})
 	if not isinstance(embedding_features, dict):
 		raise TypeError("'embedding_features' must be a dict")
@@ -306,10 +359,12 @@ def build_report_json(payload: dict[str, Any]) -> dict[str, Any]:
 	missing_keywords = _filter_report_keywords(missing_keywords)
 	resume_keywords = _filter_report_keywords(resume_keywords)
 	posting_keywords = _filter_report_keywords(posting_keywords)
-	tool_keywords = _select_tools_from_posting(posting_keywords)
+	tool_keywords = _extract_tools_from_postings(postings)
+	if not tool_keywords:
+		tool_keywords = _select_tools_from_posting(posting_keywords)
 	if not tool_keywords:
 		tool_keywords = [keyword for keyword in matched_keywords if normalize_keyword(keyword) in _TOOL_KEYWORDS or normalize_keyword(keyword) in _TECHNICAL_HINTS]
-	common_tools = _select_common_tools(posting_keywords, matched_keywords)
+	common_tools = tool_keywords[:12] if tool_keywords else _select_common_tools(posting_keywords, matched_keywords)
 	common_achievements = _select_common_achievements(missing_keywords)
 	average_similarity = float(embedding_features.get("average_similarity", 0.0))
 
