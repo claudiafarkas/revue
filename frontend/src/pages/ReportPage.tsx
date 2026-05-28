@@ -158,6 +158,11 @@ function filterReportKeywords(keywords: string[]): string[] {
 }
 
 function selectSectionTwoSignals(highlights: ReportContent['report_json']['highlights']): string[] {
+  const explicitTools = filterReportKeywords(highlights?.tool_keywords || []).filter((keyword) => TOOL_KEYWORDS.has(keyword));
+  if (explicitTools.length) {
+    return explicitTools.slice(0, 10);
+  }
+
   const commonTools = filterReportKeywords(highlights?.common_tools || []).filter((keyword) => TOOL_KEYWORDS.has(keyword));
   const postingKeywords = filterReportKeywords(highlights?.posting_keywords || []).filter((keyword) => TOOL_KEYWORDS.has(keyword));
   const matchedKeywords = filterReportKeywords(highlights?.matched_keywords || []).filter((keyword) => TOOL_KEYWORDS.has(keyword));
@@ -203,6 +208,7 @@ type ReportContent = {
     };
     highlights?: {
       common_tools?: string[];
+      tool_keywords?: string[];
       common_achievements?: string[];
       matched_keywords?: string[];
       missing_keywords?: string[];

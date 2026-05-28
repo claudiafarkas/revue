@@ -77,9 +77,11 @@ _TOOL_KEYWORDS = {
 	"airflow",
 	"api",
 	"apis",
+	"dagster",
 	"aws",
 	"azure",
 	"bigquery",
+	"dbt",
 	"ci/cd",
 	"docker",
 	"etl",
@@ -95,6 +97,7 @@ _TOOL_KEYWORDS = {
 	"mysql",
 	"nextjs",
 	"node",
+	"redshift",
 	"postgres",
 	"postgresql",
 	"python",
@@ -106,6 +109,7 @@ _TOOL_KEYWORDS = {
 	"tableau",
 	"terraform",
 	"typescript",
+	"snowflake",
 	"warehouse",
 }
 
@@ -136,6 +140,27 @@ _TECHNICAL_HINTS = {
 }
 
 
+def _normalize_keyword_candidates(keywords: list[str]) -> list[str]:
+	"""Normalize and keep only meaningful keywords in original order."""
+	return filter_meaningful_keywords(keywords)
+
+
+def _select_tools_from_posting(posting_keywords: list[str]) -> list[str]:
+	"""Extract a tools-first view from posting keywords, keeping only stack terms."""
+	candidates = _normalize_keyword_candidates(posting_keywords)
+	selected: list[str] = []
+	seen: set[str] = set()
+	for keyword in candidates:
+		cleaned = normalize_keyword(keyword)
+		if cleaned not in _TOOL_KEYWORDS and cleaned not in _TECHNICAL_HINTS:
+			continue
+		if cleaned in seen:
+			continue
+		seen.add(cleaned)
+		selected.append(cleaned)
+	return selected
+
+
 def _score_keyword(keyword: str) -> tuple[int, int, str]:
 	"""Rank keywords by technical specificity, tool status, and length."""
 	cleaned = normalize_keyword(keyword)
@@ -154,6 +179,21 @@ def _filter_report_keywords(keywords: list[str]) -> list[str]:
 
 def _select_common_tools(posting_keywords: list[str], matched_keywords: list[str]) -> list[str]:
 	"""Favor technical or tool-like terms over generic recruiting language."""
+	posting_tools = _select_tools_from_posting(posting_keywords)
+	matched_tools = [keyword for keyword in _filter_report_keywords(matched_keywords) if normalize_keyword(keyword) in _TOOL_KEYWORDS or normalize_keyword(keyword) in _TECHNICAL_HINTS]
+	ordered: list[str] = []
+	seen: set[str] = set()
+	for keyword in posting_tools + matched_tools:
+		cleaned = normalize_keyword(keyword)
+		if cleaned in seen:
+			continue
+		seen.add(cleaned)
+		ordered.append(cleaned)
+
+	if ordered:
+		return ordered[:12]
+
+	# Last-resort fallback only if we failed to detect any tools at all.
 	candidates = _filter_report_keywords(posting_keywords + [keyword for keyword in matched_keywords if keyword not in posting_keywords])
 	ordered = sorted(candidates, key=_score_keyword)
 	return ordered[:12]
@@ -161,7 +201,7 @@ def _select_common_tools(posting_keywords: list[str], matched_keywords: list[str
 
 def _select_common_achievements(missing_keywords: list[str]) -> list[str]:
 	"""Return filtered achievement and emphasis gaps without filler words."""
-	return _filter_report_keywords(missing_keywords)[:12]
+	return [keyword for keyword in _filter_report_keywords(missing_keywords) if keyword not in _TOOL_KEYWORDS][:12]
 
 
 def _looks_like_rewrite_recommendation(item: str) -> bool:
@@ -266,6 +306,9 @@ def build_report_json(payload: dict[str, Any]) -> dict[str, Any]:
 	missing_keywords = _filter_report_keywords(missing_keywords)
 	resume_keywords = _filter_report_keywords(resume_keywords)
 	posting_keywords = _filter_report_keywords(posting_keywords)
+	tool_keywords = _select_tools_from_posting(posting_keywords)
+	if not tool_keywords:
+		tool_keywords = [keyword for keyword in matched_keywords if normalize_keyword(keyword) in _TOOL_KEYWORDS or normalize_keyword(keyword) in _TECHNICAL_HINTS]
 	common_tools = _select_common_tools(posting_keywords, matched_keywords)
 	common_achievements = _select_common_achievements(missing_keywords)
 	average_similarity = float(embedding_features.get("average_similarity", 0.0))
@@ -318,6 +361,7 @@ def build_report_json(payload: dict[str, Any]) -> dict[str, Any]:
 		},
 		"highlights": {
 			"common_tools": common_tools,
+			"tool_keywords": tool_keywords[:12],
 			"common_achievements": common_achievements,
 			"matched_keywords": matched_keywords[:15],
 			"missing_keywords": missing_keywords[:15],
