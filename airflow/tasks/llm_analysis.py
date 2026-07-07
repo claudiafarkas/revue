@@ -50,6 +50,16 @@ exactly these keys:
   "overview": "3-4 sentence analyst-grade overall assessment of fit.",
   "strengths_summary": "2-3 sentences on what the candidate does well relative to these roles.",
   "gaps_summary": "2-3 sentences on gaps or under-represented experience.",
+    "role_positioning": {{
+        "current_resume_read": "1-2 sentences describing what role the resume currently reads closest to.",
+        "better_fit_roles": ["role 1", "role 2", "role 3"],
+        "pivot_summary": "2-3 sentences explaining how to pivot toward the target role or improve fit for the current role family.",
+        "pivot_tips": [
+            "specific tip 1",
+            "specific tip 2",
+            "specific tip 3"
+        ]
+    }},
   "recommendations": [
         "Rewrite \"<actual resume phrase>\" -> \"<improved resume bullet>\" | Why: <short rationale tied to posting requirements>",
         "Rewrite \"<actual resume phrase>\" -> \"<improved resume bullet>\" | Why: <short rationale tied to posting requirements>",
@@ -65,6 +75,9 @@ Field definitions:
 - matched_skills: skills clearly present in the resume that address a job requirement — allow synonyms and close equivalents (e.g. "Postgres" matches "relational databases").
 - missing_skills: requirements from the postings not adequately represented in the resume.
 - overview / strengths_summary / gaps_summary: written for the candidate, professional tone, specific to the actual content.
+- role_positioning.current_resume_read: identify the role family this resume most strongly signals today.
+- role_positioning.better_fit_roles: 2-4 adjacent roles that the current resume would be more competitive for right now.
+- role_positioning.pivot_summary / pivot_tips: use general hiring-market knowledge to explain how the candidate can pivot toward the target role in the postings, or deepen fit in their current role family if a pivot is not the right move.
 - recommendations: highly specific resume edits referencing real gaps from the analysis — NOT generic advice.
     - At least 3 recommendations must be explicit before/after rewrites in this exact style:
         Rewrite "<actual phrase from resume>" -> "<improved phrase>" | Why: <reason>

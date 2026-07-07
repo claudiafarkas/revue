@@ -1281,6 +1281,61 @@ main {
   gap: 10px;
 }
 
+.report-role-guidance {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(122, 109, 86, 0.22);
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.report-role-guidance__eyebrow {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #6a624d;
+  font-weight: 600;
+}
+
+.report-role-guidance__lead,
+.report-role-guidance__summary {
+  margin: 0;
+  color: #2a3632;
+  font-size: 0.96rem;
+  line-height: 1.62;
+}
+
+.report-role-guidance__roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.report-role-guidance__role {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(122, 109, 86, 0.22);
+  background: rgba(252, 246, 235, 0.88);
+  color: #5a4b34;
+  font-size: 0.82rem;
+  font-family: 'Instrument Sans', sans-serif;
+}
+
+.report-role-guidance__tips {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+  color: #2f3f39;
+  font-size: 0.92rem;
+  line-height: 1.58;
+}
+
 .report-recommendation {
   position: relative;
   margin: 0;
@@ -1317,6 +1372,16 @@ main {
   text-transform: uppercase;
   color: #5f6f69;
   font-weight: 600;
+}
+
+.report-recommendation__group {
+  display: grid;
+  gap: 14px;
+}
+
+.report-recommendation__entry {
+  display: grid;
+  gap: 0;
 }
 
 .report-recommendation__line {
@@ -1368,8 +1433,8 @@ main {
 
 .report-recommendation__why {
   margin: 10px 0 0;
-  padding-top: 8px;
-  border-top: 1px dashed rgba(29, 42, 38, 0.14);
+  padding-bottom: 8px;
+  border-bottom: 1px dashed rgba(29, 42, 38, 0.14);
   font-size: 0.9rem;
   color: #3b4f49;
 }

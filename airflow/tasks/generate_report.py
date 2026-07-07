@@ -373,12 +373,22 @@ def _build_recommendations(missing_keywords: list[str], resume_keywords: list[st
 
 def _build_narrative(llm_analysis: dict[str, Any]) -> dict[str, Any]:
 	"""Map GPT output fields into the ``narrative`` block stored in the report."""
+	role_positioning = llm_analysis.get("role_positioning")
+	if not isinstance(role_positioning, dict):
+		role_positioning = {}
+
 	return {
 		"overview": llm_analysis.get("overview", ""),
 		"strengths_summary": llm_analysis.get("strengths_summary", ""),
 		"gaps_summary": llm_analysis.get("gaps_summary", ""),
 		"resume_experience_level": llm_analysis.get("resume_experience_level", ""),
 		"posting_experience_level": llm_analysis.get("posting_experience_level", ""),
+		"role_positioning": {
+			"current_resume_read": role_positioning.get("current_resume_read", ""),
+			"better_fit_roles": [item for item in role_positioning.get("better_fit_roles", []) if isinstance(item, str)],
+			"pivot_summary": role_positioning.get("pivot_summary", ""),
+			"pivot_tips": [item for item in role_positioning.get("pivot_tips", []) if isinstance(item, str)],
+		},
 	}
 
 
@@ -433,6 +443,7 @@ def build_report_json(payload: dict[str, Any]) -> dict[str, Any]:
 	common_tools = tool_keywords[:12] if tool_keywords else _select_common_tools(posting_keywords, matched_keywords)
 	common_achievements = _select_common_achievements(missing_keywords)
 	average_similarity = float(embedding_features.get("average_similarity", 0.0))
+	posting_similarities = [float(score) for score in embedding_features.get("similarities", []) if isinstance(score, (int, float))]
 	match_score = _recompute_match_score(matched_keywords, missing_keywords)
 	tool_overlap_score = _compute_tool_overlap_score(tool_keywords, resume_tools)
 	# Blend lexical embedding and explicit tool overlap so Fit Overview tracks actual requirement coverage.
@@ -494,6 +505,12 @@ def build_report_json(payload: dict[str, Any]) -> dict[str, Any]:
 			"missing_keywords": missing_keywords[:15],
 			"resume_keywords": resume_keywords[:15],
 			"posting_keywords": posting_keywords[:15],
+			"posting_similarities": [round(score, 4) for score in posting_similarities[:12]],
+			"similarity_snapshot": {
+				"semantic_similarity": round(average_similarity, 4),
+				"tool_overlap": tool_overlap_score,
+				"blended_similarity": embedding_similarity,
+			},
 			"detected_contact_fields": {
 				"emails": resume_features.get("emails", []),
 				"phones": resume_features.get("phones", []),

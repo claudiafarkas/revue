@@ -203,6 +203,12 @@ type Narrative = {
   gaps_summary?: string;
   resume_experience_level?: string;
   posting_experience_level?: string;
+  role_positioning?: {
+    current_resume_read?: string;
+    better_fit_roles?: string[];
+    pivot_summary?: string;
+    pivot_tips?: string[];
+  };
 };
 
 type ReportContent = {
@@ -241,6 +247,13 @@ type ReportSummary = {
   matchScore: string;
   embeddingSimilarity: string;
   fitLabel: string;
+};
+
+type RoleGuidance = {
+  currentResumeRead: string;
+  betterFitRoles: string[];
+  pivotSummary: string;
+  pivotTips: string[];
 };
 
 type FitBand = {
@@ -298,6 +311,150 @@ function parseRewriteRecommendation(item: string): { before: string; after: stri
   };
 }
 
+function splitRecommendations(items: string[]): {
+  rewrites: Array<{ key: string; before: string; after: string; why: string }>;
+  others: string[];
+} {
+  const rewrites: Array<{ key: string; before: string; after: string; why: string }> = [];
+  const others: string[] = [];
+
+  for (const item of items) {
+    const parsed = parseRewriteRecommendation(item);
+    if (parsed) {
+      rewrites.push({ key: item, ...parsed });
+      continue;
+    }
+    others.push(item);
+  }
+
+  return { rewrites, others };
+}
+
+const ROLE_CLUSTERS = [
+  {
+    label: 'Data Analyst',
+    signals: ['sql', 'tableau', 'excel', 'looker', 'powerpoint', 'kpi', 'dashboard', 'analytics', 'stakeholder'],
+  },
+  {
+    label: 'Data Engineer',
+    signals: ['airflow', 'dbt', 'spark', 'kafka', 'docker', 'terraform', 'etl', 'pipeline', 'warehouse', 'snowflake'],
+  },
+  {
+    label: 'Analytics Engineer',
+    signals: ['dbt', 'sql', 'warehouse', 'snowflake', 'bigquery', 'looker', 'tableau', 'semantic layer'],
+  },
+  {
+    label: 'Machine Learning Analyst',
+    signals: ['python', 'pandas', 'numpy', 'scikit-learn', 'nlp', 'classification models', 'ml'],
+  },
+];
+
+function inferRoleGuidance(content: ReportContent | null): RoleGuidance | null {
+  if (!content) {
+    return null;
+  }
+
+  const highlights = content.report_json.highlights || {};
+  const narrative = content.report_json.narrative;
+  const rolePositioning = narrative?.role_positioning;
+  const llmRoles = filterReportKeywords(rolePositioning?.better_fit_roles || []);
+  const llmTips = (rolePositioning?.pivot_tips || []).filter((item) => typeof item === 'string' && item.trim());
+  if (rolePositioning?.current_resume_read || llmRoles.length || rolePositioning?.pivot_summary || llmTips.length) {
+    return {
+      currentResumeRead: rolePositioning?.current_resume_read || 'Your resume currently signals an adjacent role family more clearly than the target postings.',
+      betterFitRoles: llmRoles,
+      pivotSummary: rolePositioning?.pivot_summary || 'Tighten the narrative around the role family you want, then add stronger evidence for the missing requirements.',
+      pivotTips: llmTips,
+    };
+  }
+
+  const resumeSignals = filterReportKeywords([
+    ...(highlights.resume_keywords || []),
+    ...(highlights.matched_keywords || []),
+  ]);
+  const missingSignals = filterReportKeywords(highlights.missing_keywords || []);
+
+  const rankedRoles = ROLE_CLUSTERS.map((cluster) => ({
+    label: cluster.label,
+    score: cluster.signals.reduce((total, signal) => total + (resumeSignals.includes(signal) ? 1 : 0), 0),
+    signals: cluster.signals.filter((signal) => resumeSignals.includes(signal)).slice(0, 3),
+  }))
+    .filter((cluster) => cluster.score > 0)
+    .sort((left, right) => right.score - left.score);
+
+  const primaryRole = rankedRoles[0]?.label || 'analyst-leaning data role';
+  const primarySignals = rankedRoles[0]?.signals || resumeSignals.slice(0, 3);
+  const betterFitRoles = rankedRoles.slice(0, 3).map((cluster) => cluster.label);
+  const gapFocus = missingSignals.slice(0, 3).join(', ');
+
+  return {
+    currentResumeRead: primarySignals.length
+      ? `Your resume currently reads most clearly as a ${primaryRole} profile because it emphasizes ${primarySignals.join(', ')}.`
+      : 'Your resume currently reads closer to an adjacent data role than to the full target role scope in these postings.',
+    betterFitRoles,
+    pivotSummary: gapFocus
+      ? `To move toward the target role family, strengthen evidence around ${gapFocus}. The resume will feel more credible when those signals appear in execution-focused bullets, not just keyword mentions.`
+      : 'To deepen fit, make the target role explicit in your summary and add stronger execution evidence around the most important requirements.',
+    pivotTips: [
+      'Rewrite your summary so it names the role family you want and the business problems you solve.',
+      'For each target-role gap, add one bullet with tool, scope, stakeholder context, and a measurable result.',
+      'Group adjacent projects so the target role pattern reads consistently across the resume, not as isolated keywords.',
+    ],
+  };
+}
+
+function buildRecommendationMarkup(recommendationSection: RenderSection | undefined, roleGuidance: RoleGuidance | null): string {
+  if (!recommendationSection) {
+    return '';
+  }
+
+  const roleMarkup = roleGuidance
+    ? `<section style="margin-top:18px;padding:16px;border-radius:16px;border:1px solid rgba(122,109,86,0.22);background:rgba(255,255,255,0.58);">
+        <p style="margin:0 0 10px;font-size:12px;letter-spacing:0.09em;text-transform:uppercase;color:#6a624d;font-weight:600;">Role Positioning</p>
+        <p style="margin:0;line-height:1.7;font-size:15px;color:#2a3632;">${roleGuidance.currentResumeRead}</p>
+        ${roleGuidance.betterFitRoles.length ? `<p style="margin:12px 0 0;font-size:13px;text-transform:uppercase;letter-spacing:0.08em;color:#5b6662;">Better-fit roles right now</p><p style="margin:8px 0 0;line-height:1.7;font-size:15px;color:#2a3632;">${roleGuidance.betterFitRoles.join(', ')}</p>` : ''}
+        <p style="margin:12px 0 0;line-height:1.7;font-size:15px;color:#2a3632;">${roleGuidance.pivotSummary}</p>
+        ${roleGuidance.pivotTips.length ? `<ul style="margin:12px 0 0;padding-left:18px;display:grid;gap:8px;color:#2f3f39;font-size:14px;line-height:1.58;">${roleGuidance.pivotTips.map((tip) => `<li>${tip}</li>`).join('')}</ul>` : ''}
+      </section>`
+    : '';
+
+  const grouped = splitRecommendations(recommendationSection.items || []);
+
+  const itemsMarkup = recommendationSection.items?.length
+    ? `<ul style="margin:14px 0 0;padding-left:0;list-style:none;display:grid;gap:10px;">
+        ${grouped.rewrites.length ? `<li style="margin:0;padding:12px 14px 12px 18px;border-radius:14px;border:1px solid rgba(29,42,38,0.12);background:rgba(255,255,255,0.7);font-size:15px;line-height:1.58;color:#263330;">
+          <p style="margin:0 0 10px;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#5f6f69;font-weight:600;">Rewrite suggestions</p>
+          <div style="display:grid;gap:14px;">
+            ${grouped.rewrites
+              .map((parsed) => `<div style="display:grid;gap:0;">
+                <p style="margin:0;display:flex;align-items:flex-start;gap:8px;">
+                  <span style="flex:0 0 auto;margin-top:2px;padding:2px 7px;border-radius:999px;border:1px solid rgba(122,109,86,0.28);background:rgba(240,235,226,0.75);color:#554c3f;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;">Current</span>
+                  <span style="display:inline-block;padding:4px 8px;border-radius:8px;background:rgba(248,244,236,0.9);border:1px solid rgba(29,42,38,0.09);font-style:italic;color:#364742;">${parsed.before}</span>
+                </p>
+                <p style="margin:8px 0 0;display:flex;align-items:flex-start;gap:8px;">
+                  <span style="flex:0 0 auto;margin-top:2px;padding:2px 7px;border-radius:999px;border:1px solid rgba(72,112,86,0.34);background:rgba(228,242,232,0.88);color:#2f5a43;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;">Updated</span>
+                  <span style="display:inline-block;padding:4px 8px;border-radius:8px;background:rgba(235,244,236,0.88);border:1px solid rgba(76,124,92,0.24);color:#1f4933;">${parsed.after}</span>
+                </p>
+                <p style="margin:10px 0 0;padding-bottom:8px;border-bottom:1px dashed rgba(29,42,38,0.14);font-size:14px;color:#3b4f49;">Why this helps: ${parsed.why}</p>
+              </div>`)
+              .join('')}
+          </div>
+        </li>` : ''}
+        ${grouped.others
+          .map((item) => `<li style="position:relative;margin:0;padding:12px 14px 12px 34px;border-radius:14px;border:1px solid rgba(29,42,38,0.12);background:rgba(255,255,255,0.7);font-size:15px;line-height:1.58;color:#263330;">${item}</li>`)
+          .join('')}
+      </ul>`
+    : recommendationSection.body
+      ? `<p style="margin:14px 0 0;line-height:1.7;font-size:15px;color:#35413d;">${recommendationSection.body}</p>`
+      : '';
+
+  return `<section style="margin-top:28px;padding:24px;border-radius:24px;border:1px solid rgba(202,167,114,0.45);background:linear-gradient(180deg, rgba(255,244,225,0.9), rgba(255,251,243,0.94));box-shadow:0 18px 40px rgba(202,167,114,0.18);">
+    <h2 style="margin:0;font-size:13px;text-transform:uppercase;letter-spacing:0.08em;color:#5b6662;">${recommendationSection.title}</h2>
+    ${roleMarkup}
+    ${itemsMarkup}
+  </section>`;
+}
+
 function buildSections(content: ReportContent | null): RenderSection[] {
   if (!content) {
     return [];
@@ -308,7 +465,6 @@ function buildSections(content: ReportContent | null): RenderSection[] {
   const recommendations = content.report_json.recommendations || [];
   const narrative = content.report_json.narrative;
   const commonTools = selectSectionTwoSignals(highlights);
-  const commonAchievements = filterReportKeywords(highlights.common_achievements || []).slice(0, 12);
   const postingKeywords = filterReportKeywords(highlights.posting_keywords || []).slice(0, 10);
   const resumeKeywords = filterReportKeywords(highlights.resume_keywords || []).slice(0, 10);
 
@@ -366,12 +522,6 @@ function buildSections(content: ReportContent | null): RenderSection[] {
       title: 'What’s Missing or Under-Emphasized',
       items: missing,
       body: gapsBody,
-      tone: 'signal',
-    },
-    {
-      title: 'Recurring Employer Signals',
-      items: commonAchievements,
-      body: commonAchievements.length ? undefined : 'No recurring achievement signals were detected from the current postings.',
       tone: 'signal',
     },
     {
@@ -515,7 +665,10 @@ function buildPreviewHtml(content: ReportContent | null): string {
     </div>`;
 
   const sections = buildSections(content);
-  const sectionMarkup = sections
+  const roleGuidance = inferRoleGuidance(content);
+  const recommendationSection = sections.find((section) => section.title === 'Recommended Next Steps');
+  const coreSections = sections.filter((section) => section.title !== 'Recommended Next Steps');
+  const sectionMarkup = coreSections
     .map((section) => {
       const itemsMarkup = (section.items || [])
         .map((item) => `<span style="display:inline-block;margin:0 8px 8px 0;padding:6px 12px;border-radius:999px;background:#f2ede3;border:1px solid #e1d6c3;font-size:13px;">${item}</span>`)
@@ -528,6 +681,7 @@ function buildPreviewHtml(content: ReportContent | null): string {
       </section>`;
     })
     .join('');
+  const recommendationMarkup = buildRecommendationMarkup(recommendationSection, roleGuidance);
 
   const humanStatus = formatPipelineStatus(content.status, content.stage);
 
@@ -553,6 +707,7 @@ function buildPreviewHtml(content: ReportContent | null): string {
   </div>
   ${metricsMarkup}
   ${sectionMarkup}
+  ${recommendationMarkup}
   <p style="margin-top:40px;font-size:12px;color:#9aada8;" class="no-print">Generated by Revue.ai</p>
 </body>
 </html>`;
@@ -629,6 +784,8 @@ export function ReportPage() {
   const legendGuidance = buildLegendGuidance(activeFitBand, nextFitBand, fitScores);
   const recommendationSection = reportSections.find((section) => section.title === 'Recommended Next Steps');
   const coreSections = reportSections.filter((section) => section.title !== 'Recommended Next Steps');
+  const roleGuidance = inferRoleGuidance(reportContent);
+  const groupedRecommendations = splitRecommendations(recommendationSection?.items || []);
 
   return (
     <StepShell
@@ -783,29 +940,52 @@ export function ReportPage() {
             <article className="report-conclusion">
               <p className="eyebrow report-card__label">Conclusion</p>
               <h2 className="report-card__title report-card__title--conclusion">{recommendationSection.title}</h2>
+              {roleGuidance ? (
+                <section className="report-role-guidance">
+                  <p className="report-role-guidance__eyebrow">Role Positioning</p>
+                  <p className="report-role-guidance__lead">{roleGuidance.currentResumeRead}</p>
+                  {roleGuidance.betterFitRoles.length ? (
+                    <div className="report-role-guidance__roles">
+                      {roleGuidance.betterFitRoles.map((role) => (
+                        <span key={role} className="report-role-guidance__role">{role}</span>
+                      ))}
+                    </div>
+                  ) : null}
+                  <p className="report-role-guidance__summary">{roleGuidance.pivotSummary}</p>
+                  {roleGuidance.pivotTips.length ? (
+                    <ul className="report-role-guidance__tips">
+                      {roleGuidance.pivotTips.map((tip) => (
+                        <li key={tip}>{tip}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </section>
+              ) : null}
               {recommendationSection.items?.length ? (
                 <ul className="report-recommendations">
-                  {recommendationSection.items.map((item) => {
-                    const parsed = parseRewriteRecommendation(item);
-                    if (!parsed) {
-                      return <li key={item} className="report-recommendation">{item}</li>;
-                    }
-
-                    return (
-                      <li key={item} className="report-recommendation report-recommendation--rewrite">
-                        <p className="report-recommendation__label">Rewrite suggestion</p>
-                        <p className="report-recommendation__line">
-                          <span className="report-recommendation__tag">Current</span>
-                          <span className="report-recommendation__quote">{parsed.before}</span>
-                        </p>
-                        <p className="report-recommendation__line">
-                          <span className="report-recommendation__tag report-recommendation__tag--next">Updated</span>
-                          <span className="report-recommendation__quote report-recommendation__quote--after">{parsed.after}</span>
-                        </p>
-                        <p className="report-recommendation__why">Why this helps: {parsed.why}</p>
-                      </li>
-                    );
-                  })}
+                  {groupedRecommendations.rewrites.length ? (
+                    <li className="report-recommendation report-recommendation--rewrite">
+                      <p className="report-recommendation__label">Rewrite suggestions</p>
+                      <div className="report-recommendation__group">
+                        {groupedRecommendations.rewrites.map((parsed) => (
+                          <div key={parsed.key} className="report-recommendation__entry">
+                            <p className="report-recommendation__line">
+                              <span className="report-recommendation__tag">Current</span>
+                              <span className="report-recommendation__quote">{parsed.before}</span>
+                            </p>
+                            <p className="report-recommendation__line">
+                              <span className="report-recommendation__tag report-recommendation__tag--next">Updated</span>
+                              <span className="report-recommendation__quote report-recommendation__quote--after">{parsed.after}</span>
+                            </p>
+                            <p className="report-recommendation__why">Why this helps: {parsed.why}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </li>
+                  ) : null}
+                  {groupedRecommendations.others.map((item) => (
+                    <li key={item} className="report-recommendation">{item}</li>
+                  ))}
                 </ul>
               ) : recommendationSection.body ? (
                 <p className="report-card__body">{recommendationSection.body}</p>
