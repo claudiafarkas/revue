@@ -1,15 +1,34 @@
 """Routes for report status and retrieval."""
 
 import logging
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 
-from api.schemas.report import ReportContentResponse, ReportStatusResponse
+from api.schemas.report import ReportContentResponse, ReportStatusResponse, WorkflowHistoryResponse
 from api.services.auth import AuthenticatedUser, get_current_user
-from api.services.database import get_report_content, get_report_snapshot
+from api.services.database import get_report_content, get_report_snapshot, get_resume_file, list_workflow_history
 
 router = APIRouter(prefix="/report", tags=["report"])
 logger = logging.getLogger(__name__)
+
+
+@router.get("/history", response_model=WorkflowHistoryResponse)
+def get_workflow_history_route(
+	current_user: AuthenticatedUser = Depends(get_current_user),
+) -> WorkflowHistoryResponse:
+	"""Return historical workflow rows for the authenticated user account page."""
+	logger.info("Workflow history requested: uid=%s", current_user.uid)
+	try:
+		items = list_workflow_history(current_user.uid)
+	except Exception as exc:
+		logger.exception("Failed to load workflow history: uid=%s", current_user.uid)
+		raise HTTPException(
+			status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+			detail="Unable to read workflow history from PostgreSQL.",
+		) from exc
+
+	return WorkflowHistoryResponse(items=items)
 
 
 @router.get("/{job_id}", response_model=ReportStatusResponse)
@@ -84,11 +103,15 @@ def get_report_content_route(
 		)
 
 	logger.info("Report content response: job_id=%s keys=%s", job_id, sorted(report_json.keys()))
+	source_documents = snapshot.get("source_documents")
+	if source_documents is not None and not isinstance(source_documents, dict):
+		source_documents = None
 	return ReportContentResponse(
 		job_id=job_id,
 		status=snapshot["status"],
 		stage=snapshot["stage"],
 		report_json=report_json,
+		source_documents=source_documents,
 	)
 
 
@@ -101,4 +124,37 @@ def download_report(job_id: str) -> None:
 			f"Report download for '{job_id}' is not available yet. "
 			"PDF generation and storage will be implemented later."
 		),
+	)
+
+
+@router.get("/{job_id}/resume-file")
+def get_report_resume_file(
+	job_id: str,
+	current_user: AuthenticatedUser = Depends(get_current_user),
+) -> Response:
+	"""Return the uploaded resume PDF file for embedding in report exports."""
+	logger.info("Resume file requested for report: job_id=%s uid=%s", job_id, current_user.uid)
+	try:
+		resume_file = get_resume_file(job_id, current_user.uid)
+	except Exception as exc:
+		logger.exception("Failed to load resume file for report: job_id=%s", job_id)
+		raise HTTPException(
+			status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+			detail="Unable to load resume file from PostgreSQL.",
+		) from exc
+
+	if resume_file is None:
+		raise HTTPException(
+			status_code=status.HTTP_404_NOT_FOUND,
+			detail=f"No uploaded resume found for job_id '{job_id}'.",
+		)
+
+	filename = resume_file["filename"]
+	encoded_filename = quote(filename)
+	return Response(
+		content=resume_file["file_data"],
+		media_type=resume_file["content_type"],
+		headers={
+			"Content-Disposition": f"inline; filename*=UTF-8''{encoded_filename}",
+		},
 	)

@@ -859,6 +859,186 @@ main {
   border-bottom: 1px solid rgba(29, 42, 38, 0.08);
 }
 
+.step-layout--account .step-layout__main {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  padding: 0;
+  gap: 24px;
+}
+
+.account-main {
+  display: grid;
+  gap: 18px;
+}
+
+.account-tabbar {
+  display: inline-flex;
+  gap: 8px;
+  width: fit-content;
+}
+
+.account-tab {
+  border: 1px solid rgba(29, 42, 38, 0.18);
+  background: transparent;
+  color: #43524d;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.account-tab--active {
+  background: rgba(29, 42, 38, 0.9);
+  color: #f8f4ee;
+  border-color: rgba(29, 42, 38, 0.9);
+}
+
+.account-view {
+  display: grid;
+  gap: 10px;
+}
+
+.account-kv {
+  display: grid;
+  gap: 6px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(29, 42, 38, 0.08);
+}
+
+.account-kv__label {
+  font-weight: 600;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--sage-strong);
+}
+
+.account-history {
+  display: grid;
+  gap: 12px;
+}
+
+.account-history__intro {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.account-history__table-wrap {
+  overflow-x: auto;
+  border: 1px solid rgba(29, 42, 38, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.account-history__table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 860px;
+}
+
+.account-history__table th,
+.account-history__table td {
+  text-align: left;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(29, 42, 38, 0.08);
+  vertical-align: top;
+  font-size: 0.9rem;
+}
+
+.account-history__table th {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.72rem;
+  color: #5f6f69;
+  background: rgba(248, 244, 236, 0.82);
+}
+
+.account-history__table tr:last-child td {
+  border-bottom: none;
+}
+
+.account-history__fit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.account-history__fit span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(29, 42, 38, 0.14);
+  background: rgba(255, 255, 255, 0.88);
+  font-size: 0.78rem;
+}
+
+.account-history__preview {
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+.account-history-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+
+.account-history-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(21, 28, 25, 0.44);
+}
+
+.account-history-modal__panel {
+  position: relative;
+  z-index: 1;
+  max-width: 760px;
+  max-height: 84vh;
+  overflow: auto;
+  margin: 8vh auto 0;
+  padding: 20px;
+  border-radius: 20px;
+  border: 1px solid rgba(29, 42, 38, 0.2);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 24px 54px rgba(19, 28, 24, 0.24);
+  display: grid;
+  gap: 10px;
+}
+
+.account-history-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.account-history-modal__header .button {
+  min-height: 34px;
+}
+
+.account-history-modal__panel h3 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.account-history-modal__meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.account-history-modal__list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 7px;
+}
+
 .report-container {
   width: min(980px, 100%);
   margin: 0 auto;
@@ -1572,6 +1752,24 @@ main {
 
   .report-card__title {
     white-space: normal;
+  }
+
+  .account-tabbar {
+    width: 100%;
+  }
+
+  .account-tab {
+    flex: 1 1 0;
+    text-align: center;
+  }
+
+  .account-history__table {
+    min-width: 640px;
+  }
+
+  .account-history-modal__panel {
+    margin: 5vh 12px 0;
+    max-width: none;
   }
 
   .form-actions--report {
