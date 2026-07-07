@@ -2,9 +2,10 @@
 
 import logging
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from api.schemas.report import ReportContentResponse, ReportStatusResponse
+from api.services.auth import AuthenticatedUser, get_current_user
 from api.services.database import get_report_content, get_report_snapshot
 
 router = APIRouter(prefix="/report", tags=["report"])
@@ -12,11 +13,14 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/{job_id}", response_model=ReportStatusResponse)
-def get_report_status(job_id: str) -> ReportStatusResponse:
+def get_report_status(
+	job_id: str,
+	current_user: AuthenticatedUser = Depends(get_current_user),
+) -> ReportStatusResponse:
 	"""Return current status based on the report-tracking table."""
-	logger.info("Report status requested: job_id=%s", job_id)
+	logger.info("Report status requested: job_id=%s uid=%s", job_id, current_user.uid)
 	try:
-		snapshot = get_report_snapshot(job_id)
+		snapshot = get_report_snapshot(job_id, current_user.uid)
 	except Exception as exc:
 		logger.exception("Failed to read report status: job_id=%s", job_id)
 		raise HTTPException(
@@ -49,11 +53,14 @@ def get_report_status(job_id: str) -> ReportStatusResponse:
 
 
 @router.get("/{job_id}/content", response_model=ReportContentResponse)
-def get_report_content_route(job_id: str) -> ReportContentResponse:
+def get_report_content_route(
+	job_id: str,
+	current_user: AuthenticatedUser = Depends(get_current_user),
+) -> ReportContentResponse:
 	"""Return persisted report_json content for rendering the report page."""
-	logger.info("Report content requested: job_id=%s", job_id)
+	logger.info("Report content requested: job_id=%s uid=%s", job_id, current_user.uid)
 	try:
-		snapshot = get_report_content(job_id)
+		snapshot = get_report_content(job_id, current_user.uid)
 	except Exception as exc:
 		logger.exception("Failed to read report content: job_id=%s", job_id)
 		raise HTTPException(

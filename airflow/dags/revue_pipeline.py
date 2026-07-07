@@ -69,7 +69,7 @@ def on_pipeline_failure(context: dict) -> None:
 
 
     # Step 4: Runtime config readers from dag_run.conf.
-@task
+@task(retries=0)
 def get_job_id_from_conf(**context: Any) -> str:
     """Read job_id from dag_run.conf and fail fast if it is missing."""
     dag_run = context.get("dag_run")
@@ -82,7 +82,7 @@ def get_job_id_from_conf(**context: Any) -> str:
 
 
 # Step 2: Task wrappers that call reusable task-module functions.
-@task
+@task(retries=0)
 def build_initial_payload(job_id: str, resume_text: str) -> dict[str, Any]:
     """Load postings by job_id and attach resume text for downstream tasks."""
     logger.info("Starting build_initial_payload: job_id=%s resume_chars=%d", job_id, len(resume_text))
@@ -93,7 +93,7 @@ def build_initial_payload(job_id: str, resume_text: str) -> dict[str, Any]:
     return payload
 
 
-@task
+@task(retries=0)
 def clean_step(payload: dict[str, Any]) -> dict[str, Any]:
     logger.info("Starting clean_step: %s", _payload_summary(payload))
     tasks.report_status.update_report_stage(job_id=payload["job_id"], stage="cleaning_text")
@@ -102,7 +102,7 @@ def clean_step(payload: dict[str, Any]) -> dict[str, Any]:
     return cleaned_payload
 
 
-@task
+@task(retries=0)
 def resume_features_step(payload: dict[str, Any]) -> dict[str, Any]:
     logger.info("Starting resume_features_step: %s", _payload_summary(payload))
     tasks.report_status.update_report_stage(job_id=payload["job_id"], stage="extracting_resume_features")
@@ -117,16 +117,22 @@ def resume_features_step(payload: dict[str, Any]) -> dict[str, Any]:
     return updated_payload
 
 
-@task
+@task(retries=0)
 def extract_resume_text_step(job_id: str) -> str:
-    logger.info("Starting extract_resume_text_step: job_id=%s", job_id)
-    tasks.report_status.update_report_stage(job_id=job_id, stage="extracting_resume_text")
-    resume_text = tasks.extract_resume_text.load_resume_text(job_id)
-    logger.info("Completed extract_resume_text_step: job_id=%s resume_chars=%d", job_id, len(resume_text))
-    return resume_text
+    try:
+        logger.info("Starting extract_resume_text_step: job_id=%s", job_id)
+        tasks.report_status.update_report_stage(job_id=job_id, stage="extracting_resume_text")
+        resume_text = tasks.extract_resume_text.load_resume_text(job_id)
+        logger.info("Completed extract_resume_text_step: job_id=%s resume_chars=%d", job_id, len(resume_text))
+        if not resume_text:
+            raise ValueError("Resume text is empty after extraction")
+        return resume_text
+    except Exception as e:
+        logger.error("extract_resume_text_step failed: %s", str(e), exc_info=True)
+        raise
 
 
-@task
+@task(retries=0)
 def compare_step(payload: dict[str, Any]) -> dict[str, Any]:
     logger.info("Starting compare_step: %s", _payload_summary(payload))
     tasks.report_status.update_report_stage(job_id=payload["job_id"], stage="comparing_requirements")
@@ -142,7 +148,7 @@ def compare_step(payload: dict[str, Any]) -> dict[str, Any]:
     return updated_payload
 
 
-@task
+@task(retries=0)
 def llm_analysis_step(payload: dict[str, Any]) -> dict[str, Any]:
     logger.info("Starting llm_analysis_step: %s", _payload_summary(payload))
     tasks.report_status.update_report_stage(job_id=payload["job_id"], stage="analyzing_with_llm")
@@ -156,7 +162,7 @@ def llm_analysis_step(payload: dict[str, Any]) -> dict[str, Any]:
     return updated_payload
 
 
-@task
+@task(retries=0)
 def embeddings_step(payload: dict[str, Any]) -> dict[str, Any]:
     logger.info("Starting embeddings_step: %s", _payload_summary(payload))
     tasks.report_status.update_report_stage(job_id=payload["job_id"], stage="generating_embeddings")
@@ -171,7 +177,7 @@ def embeddings_step(payload: dict[str, Any]) -> dict[str, Any]:
     return updated_payload
 
 
-@task
+@task(retries=0)
 def report_step(payload: dict[str, Any]) -> dict[str, Any]:
     logger.info("Starting report_step: %s", _payload_summary(payload))
     tasks.report_status.update_report_stage(job_id=payload["job_id"], stage="generating_report")
@@ -185,7 +191,7 @@ def report_step(payload: dict[str, Any]) -> dict[str, Any]:
     return updated_payload
 
 
-@task
+@task(retries=0)
 def store_step(payload: dict[str, Any]) -> dict[str, Any]:
     logger.info("Starting store_step: %s", _payload_summary(payload))
     updated_payload = tasks.store_output.store_output_from_payload(payload)
@@ -204,8 +210,6 @@ with DAG(
     schedule=None,
     start_date=datetime(2024, 1, 1),
     default_args={
-        "retries": 3,
-        "retry_delay": timedelta(minutes=5),
         "on_failure_callback": on_pipeline_failure,
     },
     catchup=False,

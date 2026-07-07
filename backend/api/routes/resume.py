@@ -1,9 +1,11 @@
 """Routes for resume upload and ingestion."""
 
 import logging
+import os
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from api.schemas.resume import ResumeUploadResponse
+from api.services.auth import AuthenticatedUser, get_current_user
 from api.services.database import save_resume
 from api.services.airflow_trigger import trigger_airflow_dag
 
@@ -14,23 +16,38 @@ logger = logging.getLogger(__name__)
 @router.post("", response_model=ResumeUploadResponse, status_code=status.HTTP_202_ACCEPTED)
 async def upload_resume(
     job_id: str = Form(...),
+    filename: str = Form(...),
+    content_type: str | None = Form(None),
     file: UploadFile = File(...),
+    current_user: AuthenticatedUser = Depends(get_current_user),
 ) -> ResumeUploadResponse:
-    """Accept a PDF resume and persist it for the provided job id."""
-    filename = file.filename or "resume.pdf"        # file validation
-    logger.info("Resume upload requested: job_id=%s filename=%s", job_id, filename)
+    """Accept resume file and persist to PostgreSQL for the provided job id."""
+    logger.info(
+        "Resume upload requested: job_id=%s filename=%s uid=%s",
+        job_id,
+        filename,
+        current_user.uid,
+    )
 
     if not filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Resume must be uploaded as a PDF.")
 
-    file_data = await file.read()
-    logger.info("Read resume bytes: job_id=%s byte_count=%d", job_id, len(file_data))
+    try:
+        file_data = await file.read()
+        logger.info("Read resume bytes: job_id=%s byte_count=%d", job_id, len(file_data))
+    except Exception as exc:
+        logger.exception("Failed to read uploaded file: job_id=%s", job_id)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unable to read uploaded file.",
+        ) from exc
 
     try:
         saved = save_resume(
             job_id=job_id,
+            user_uid=current_user.uid,
             filename=filename,
-            content_type=file.content_type,
+            content_type=content_type,
             file_data=file_data,
         )
     except Exception as exc:
@@ -41,10 +58,10 @@ async def upload_resume(
         ) from exc
 
     if not saved:
-        logger.warning("Resume upload rejected due to unknown job_id: job_id=%s", job_id)
+        logger.warning("Resume upload rejected due to unknown or unauthorized job_id: job_id=%s uid=%s", job_id, current_user.uid)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Unknown job_id '{job_id}'. Submit job postings first.",        # checks if the jobid is the same
+            detail=f"Unknown job_id '{job_id}' for current user. Submit job postings first.",
         )
 
     try:

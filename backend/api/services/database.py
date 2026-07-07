@@ -4,11 +4,18 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 from typing import Any
 
 import psycopg
+from dotenv import load_dotenv
 
 from api.services.migrations import run_migrations
+
+# Load environment variables from .env file in the project root
+env_path = Path(__file__).resolve().parents[3] / ".env"
+if env_path.exists():
+    load_dotenv(env_path)
 
 logger = logging.getLogger(__name__)
 
@@ -37,18 +44,19 @@ def initialize_database() -> None:
     logger.info("Database migrations finished")
 
 
-def save_job_postings(job_id: str, postings: list[str]) -> None:
+def save_job_postings(job_id: str, user_uid: str, postings: list[str]) -> None:
     """Persist a batch of postings under a generated job identifier."""
-    logger.info("Saving job postings: job_id=%s posting_count=%d", job_id, len(postings))
+    logger.info("Saving job postings: job_id=%s user_uid=%s posting_count=%d", job_id, user_uid, len(postings))
     with psycopg.connect(connection_string()) as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO job_batches (job_id)
-                VALUES (%s)
-                ON CONFLICT (job_id) DO NOTHING;
+                INSERT INTO job_batches (job_id, user_uid)
+                VALUES (%s, %s)
+                ON CONFLICT (job_id)
+                DO UPDATE SET user_uid = EXCLUDED.user_uid;
                 """,
-                (job_id,),
+                (job_id, user_uid),
             )
             rows = [(job_id, idx, posting) for idx, posting in enumerate(postings)]
             cur.executemany(
@@ -62,30 +70,43 @@ def save_job_postings(job_id: str, postings: list[str]) -> None:
             )
             cur.execute(
                 """
-                INSERT INTO reports (job_id, status, stage)
-                VALUES (%s, 'awaiting_resume', 'postings_stored')
+                INSERT INTO reports (job_id, user_uid, status, stage)
+                VALUES (%s, %s, 'awaiting_resume', 'postings_stored')
                 ON CONFLICT (job_id)
                 DO UPDATE SET
+                    user_uid = EXCLUDED.user_uid,
                     status = EXCLUDED.status,
                     stage = EXCLUDED.stage,
                     updated_at = NOW();
                 """,
-                (job_id,),
+                (job_id, user_uid),
             )
-    logger.info("Saved job postings: job_id=%s", job_id)
+    logger.info("Saved job postings: job_id=%s user_uid=%s", job_id, user_uid)
 
 
-def save_resume(job_id: str, filename: str, content_type: str | None, file_data: bytes) -> bool:
-    """Persist a resume file for an existing job_id.
+def save_resume(
+    job_id: str,
+    user_uid: str,
+    filename: str,
+    content_type: str | None,
+    file_data: bytes,
+) -> bool:
+    """Persist resume file data to PostgreSQL for an existing job_id.
 
-    Returns False when the job_id does not exist yet.
+    Returns False when the job_id does not exist or does not belong to the user.
     """
-    logger.info("Saving resume: job_id=%s filename=%s byte_count=%d", job_id, filename, len(file_data))
+    logger.info(
+        "Saving resume to PostgreSQL: job_id=%s user_uid=%s filename=%s byte_count=%d",
+        job_id,
+        user_uid,
+        filename,
+        len(file_data),
+    )
     with psycopg.connect(connection_string()) as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT 1 FROM job_batches WHERE job_id = %s;", (job_id,))
+            cur.execute("SELECT 1 FROM job_batches WHERE job_id = %s AND user_uid = %s;", (job_id, user_uid))
             if cur.fetchone() is None:
-                logger.warning("Cannot save resume for unknown job_id: job_id=%s", job_id)
+                logger.warning("Cannot save resume for unknown or unauthorized job_id: job_id=%s user_uid=%s", job_id, user_uid)
                 return False
 
             cur.execute(
@@ -103,18 +124,19 @@ def save_resume(job_id: str, filename: str, content_type: str | None, file_data:
             )
             cur.execute(
                 """
-                INSERT INTO reports (job_id, status, stage)
-                VALUES (%s, 'queued_for_processing', 'resume_stored')
+                INSERT INTO reports (job_id, user_uid, status, stage)
+                VALUES (%s, %s, 'queued_for_processing', 'resume_stored')
                 ON CONFLICT (job_id)
                 DO UPDATE SET
+                    user_uid = EXCLUDED.user_uid,
                     status = EXCLUDED.status,
                     stage = EXCLUDED.stage,
                     updated_at = NOW();
                 """,
-                (job_id,),
+                (job_id, user_uid),
             )
 
-    logger.info("Saved resume and queued processing: job_id=%s", job_id)
+    logger.info("Saved resume metadata and queued processing: job_id=%s user_uid=%s", job_id, user_uid)
     return True
 
 
@@ -140,18 +162,18 @@ def get_job_snapshot(job_id: str) -> dict[str, Any] | None:
     }
 
 
-def get_report_snapshot(job_id: str) -> dict[str, Any] | None:
+def get_report_snapshot(job_id: str, user_uid: str) -> dict[str, Any] | None:
     """Return report-tracking fields for a job id."""
-    logger.info("Loading report snapshot: job_id=%s", job_id)
+    logger.info("Loading report snapshot: job_id=%s user_uid=%s", job_id, user_uid)
     with psycopg.connect(connection_string()) as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
                 SELECT status, stage, generated_at, report_json IS NOT NULL AS has_report_json
                 FROM reports
-                WHERE job_id = %s;
+                WHERE job_id = %s AND user_uid = %s;
                 """,
-                (job_id,),
+                (job_id, user_uid),
             )
             row = cur.fetchone()
 
@@ -168,18 +190,18 @@ def get_report_snapshot(job_id: str) -> dict[str, Any] | None:
     }
 
 
-def get_report_content(job_id: str) -> dict[str, Any] | None:
+def get_report_content(job_id: str, user_uid: str) -> dict[str, Any] | None:
     """Return full persisted report payload for a job id."""
-    logger.info("Loading full report content: job_id=%s", job_id)
+    logger.info("Loading full report content: job_id=%s user_uid=%s", job_id, user_uid)
     with psycopg.connect(connection_string()) as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
                 SELECT status, stage, report_json
                 FROM reports
-                WHERE job_id = %s;
+                WHERE job_id = %s AND user_uid = %s;
                 """,
-                (job_id,),
+                (job_id, user_uid),
             )
             row = cur.fetchone()
 

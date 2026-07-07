@@ -54,13 +54,12 @@ def _connection_string(mask_password: bool = False) -> str:
     return f"host={host} port={port} dbname={db_name} user={user} password={password}"
 
 
-
 def load_resume_text(job_id: str) -> str:
-    """Fetch latest resume PDF for a job_id and extract text."""
+    """Fetch latest resume PDF for a job_id and extract text from PostgreSQL storage."""
     if not job_id:
         raise ValueError("job_id is required")
 
-    logger.info("Loading resume PDF from database: job_id=%s", job_id)
+    logger.info("Loading resume PDF from PostgreSQL: job_id=%s", job_id)
     conn_str = _connection_string()
     with psycopg.connect(conn_str) as conn:
         with conn.cursor() as cur:
@@ -76,13 +75,17 @@ def load_resume_text(job_id: str) -> str:
             )
             row = cur.fetchone()
 
-    if row is None or row[0] is None:
-        logger.error("No resume file_data found: job_id=%s", job_id)
+    if row is None:
+        logger.error("No resume found: job_id=%s", job_id)
         raise ValueError(f"No resume found for job_id '{job_id}'.")
 
-    pdf_bytes = row[0]
-    logger.info("Resume bytes loaded: job_id=%s byte_count=%d", job_id, len(pdf_bytes))
-    reader = PdfReader(io.BytesIO(pdf_bytes))
+    file_data = row[0]
+    if file_data is None:
+        logger.error("Resume blob is NULL: job_id=%s", job_id)
+        raise ValueError(f"Resume blob is empty for job_id '{job_id}'.")
+
+    logger.info("Resume bytes loaded from PostgreSQL: job_id=%s byte_count=%d", job_id, len(file_data))
+    reader = PdfReader(io.BytesIO(file_data))
     pages = len(reader.pages)
     resume_text = _extract_text_from_reader(reader)
 

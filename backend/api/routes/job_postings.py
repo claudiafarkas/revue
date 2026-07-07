@@ -2,8 +2,9 @@
 
 import logging
 from uuid import uuid4
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from api.schemas.job_postings import JobPostingsSubmissionRequest, JobPostingsSubmissionResponse
+from api.services.auth import AuthenticatedUser, get_current_user
 from api.services.database import save_job_postings
 
 router = APIRouter(prefix="/job-postings", tags=["job-postings"])
@@ -13,13 +14,14 @@ logger = logging.getLogger(__name__)
 @router.post("", response_model=JobPostingsSubmissionResponse, status_code=status.HTTP_202_ACCEPTED)
 def create_job_postings(
 	payload: JobPostingsSubmissionRequest,
+	current_user: AuthenticatedUser = Depends(get_current_user),
 ) -> JobPostingsSubmissionResponse:
 	"""Accept job postings and persist them with a tracking identifier."""
 	job_id = f"revue-{uuid4().hex[:12]}"			# Generate a short unique job ID with a prefix for easier identification in the database
-	logger.info("Received job postings submission: job_id=%s posting_count=%d", job_id, len(payload.postings))
+	logger.info("Received job postings submission: job_id=%s posting_count=%d uid=%s", job_id, len(payload.postings), current_user.uid)
 
 	try:
-		save_job_postings(job_id=job_id, postings=payload.postings)
+		save_job_postings(job_id=job_id, user_uid=current_user.uid, postings=payload.postings)
 	except Exception as exc:
 		logger.exception("Failed to store job postings: job_id=%s", job_id)
 		raise HTTPException(

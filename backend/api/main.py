@@ -5,6 +5,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from api.routes.auth import router as auth_router
 from api.routes.job_postings import router as job_postings_router
 from api.routes.report import router as report_router
 from api.routes.resume import router as resume_router
@@ -61,6 +62,7 @@ def create_app() -> FastAPI:
             "docs": "/docs",
         }
 
+    app.include_router(auth_router, prefix="/api")
     app.include_router(job_postings_router, prefix="/api")
     app.include_router(resume_router, prefix="/api")
     app.include_router(report_router, prefix="/api")

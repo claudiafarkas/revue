@@ -40,8 +40,15 @@ def save_report_output(job_id: str, report_json: dict[str, Any]) -> None:
 		with conn.cursor() as cur:
 			cur.execute(
 				"""
-				INSERT INTO reports (job_id, status, stage, report_json, generated_at)
-				VALUES (%s, 'completed', 'report_ready', %s::jsonb, NOW())
+				INSERT INTO reports (job_id, user_uid, status, stage, report_json, generated_at)
+				VALUES (
+					%s,
+					COALESCE((SELECT user_uid FROM job_batches WHERE job_id = %s), 'legacy'),
+					'completed',
+					'report_ready',
+					%s::jsonb,
+					NOW()
+				)
 				ON CONFLICT (job_id)
 				DO UPDATE SET
 					status = EXCLUDED.status,
@@ -50,7 +57,7 @@ def save_report_output(job_id: str, report_json: dict[str, Any]) -> None:
 					generated_at = EXCLUDED.generated_at,
 					updated_at = NOW();
 				""",
-				(job_id, psycopg.types.json.Jsonb(report_json)),
+				(job_id, job_id, psycopg.types.json.Jsonb(report_json)),
 			)
 	logger.info("Saved report output and marked completed: job_id=%s", job_id)
 

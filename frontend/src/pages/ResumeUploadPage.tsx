@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { StepShell } from '../components/StepShell';
+import { useAuth } from '../context/AuthContext';
 import { useRevue } from '../context/RevueContext';
-import { getApiBaseUrl, readJsonResponse } from '../utils/api';
+import { authenticatedApiFetch, readJsonResponse } from '../utils/api';
 
 function formatFileSize(size: number) {
   if (size < 1024 * 1024) {
@@ -16,6 +17,7 @@ function formatFileSize(size: number) {
 export function ResumeUploadPage() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const { user } = useAuth();
   const { resumeFile, setResumeFile, jobId, setJobId } = useRevue();
   const [error, setError] = useState('');
   const [isDragging, setIsDragging] = useState(false);
@@ -69,15 +71,22 @@ export function ResumeUploadPage() {
       return;
     }
 
+    if (!user) {
+      setError('Please sign in to upload your resume.');
+      return;
+    }
+
     setError('');
     setIsSubmitting(true);
 
     try {
       const formData = new FormData();
       formData.append('job_id', activeJobId);
-      formData.append('file', resumeFile, resumeFile.name);
+      formData.append('filename', resumeFile.name);
+      formData.append('content_type', resumeFile.type || 'application/pdf');
+      formData.append('file', resumeFile);
 
-      const response = await fetch(`${getApiBaseUrl()}/resume`, {
+      const response = await authenticatedApiFetch('/resume', {
         method: 'POST',
         body: formData,
       });

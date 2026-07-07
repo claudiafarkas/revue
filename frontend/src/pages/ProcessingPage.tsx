@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { StepShell } from '../components/StepShell';
 import { useRevue } from '../context/RevueContext';
-import { getApiBaseUrl, readJsonResponse } from '../utils/api';
+import { authenticatedApiFetch, readJsonResponse } from '../utils/api';
 import { formatPipelineStage, formatPipelineStatus } from '../utils/status';
 
 type ReportStatus = {
@@ -64,7 +64,7 @@ export function ProcessingPage() {
 
     async function pollStatus() {
       try {
-        const response = await fetch(`${getApiBaseUrl()}/report/${encodeURIComponent(activeJobId)}`);
+        const response = await authenticatedApiFetch(`/report/${encodeURIComponent(activeJobId)}`);
         const body = (await readJsonResponse(response)) as ReportStatus | { detail?: string } | null;
 
         if (!response.ok) {

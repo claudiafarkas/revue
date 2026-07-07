@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { StepShell } from '../components/StepShell';
 import { useRevue } from '../context/RevueContext';
-import { getApiBaseUrl, readJsonResponse } from '../utils/api';
+import { authenticatedApiFetch, readJsonResponse } from '../utils/api';
 
 function getValidationMessage(value: string) {
   if (!value.trim()) {
@@ -46,7 +46,7 @@ export function JobPostingsPage() {
 
     try {
       const cleanedPostings = postings.map((posting) => posting.trim()).filter((posting) => posting.length > 0);
-      const response = await fetch(`${getApiBaseUrl()}/job-postings`, {
+      const response = await authenticatedApiFetch('/job-postings', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -3,6 +3,30 @@
 Revue.ai is a career review tool: paste job postings, upload a resume, and get a structured alignment report with matched skills, missing signals, and concrete recommendations.
 ![1775005577414](image/README/1775005577414.png)
 
+## How AI Is Used
+
+In simple terms, Revue uses AI like a smart editor and matcher.
+
+- It reads the resume and the job postings together.
+- It pulls out the important skills, tools, and requirements.
+- It figures out which skills match and which ones seem to be missing.
+- It writes the plain-language summary and improvement suggestions you see in the report.
+
+The AI is not making a hiring decision. It is helping organize the information and explain the fit more clearly.
+
+If the AI step is unavailable, Revue still works. It falls back to a simpler rules-based comparison that checks keyword overlap between the resume and the job postings.
+
+## General Workflow
+
+1. The user pastes one or more job postings.
+2. Revue saves those postings and creates a job ID.
+3. The user uploads a resume PDF.
+4. Revue extracts the text from the resume and cleans the text from both sides.
+5. Revue compares the resume against the job postings.
+6. Revue optionally uses AI to improve the skill matching and write the summary.
+7. Revue calculates similarity scores and builds the final report.
+8. The report is saved and shown in the app.
+
 ## System Flow
 
 ```mermaid

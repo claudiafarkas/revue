@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { StepShell } from '../components/StepShell';
 import { useRevue } from '../context/RevueContext';
-import { getApiBaseUrl, readJsonResponse } from '../utils/api';
+import { authenticatedApiFetch, readJsonResponse } from '../utils/api';
 import { formatPipelineStatus } from '../utils/status';
 
 const REPORT_STOPWORDS = new Set([
@@ -585,7 +585,7 @@ export function ReportPage() {
     async function loadReport() {
       setIsLoading(true);
       try {
-        const response = await fetch(`${getApiBaseUrl()}/report/${encodeURIComponent(activeJobId)}/content`);
+        const response = await authenticatedApiFetch(`/report/${encodeURIComponent(activeJobId)}/content`);
         const body = (await readJsonResponse(response)) as ReportContent | { detail?: string } | null;
         if (!response.ok) {
           const detail = body && 'detail' in body && typeof body.detail === 'string' ? body.detail : 'Unable to load generated report.';

@@ -1,6 +1,9 @@
 fastapi
 uvicorn
 pydantic
+pydantic[email]
 python-multipart
 psycopg[binary]
 pypdf
+PyJWT
+python-dotenv

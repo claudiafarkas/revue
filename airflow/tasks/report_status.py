@@ -39,14 +39,19 @@ def update_report_stage(job_id: str, stage: str, status: str = "processing") -> 
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO reports (job_id, status, stage)
-                VALUES (%s, %s, %s)
+                INSERT INTO reports (job_id, user_uid, status, stage)
+                VALUES (
+                    %s,
+                    COALESCE((SELECT user_uid FROM job_batches WHERE job_id = %s), 'legacy'),
+                    %s,
+                    %s
+                )
                 ON CONFLICT (job_id)
                 DO UPDATE SET
                     status = EXCLUDED.status,
                     stage = EXCLUDED.stage,
                     updated_at = NOW();
                 """,
-                (job_id, status, stage),
+                (job_id, job_id, status, stage),
             )
     logger.info("Updated report stage successfully: job_id=%s stage=%s status=%s", job_id, stage, status)
