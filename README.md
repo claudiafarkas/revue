@@ -1,172 +1,51 @@
 # Revue.ai
 
-Revue.ai is a career review tool: paste job postings, upload a resume, and get a structured alignment report with matched skills, missing signals, and concrete recommendations.
-![1775005577414](image/README/1775005577414.png)
+Revue.ai is a local career-fit app. You paste job postings, upload a resume PDF, and get a structured report with strengths, gaps, and suggestions.
 
-## How AI Is Used
+![Revue screenshot](image/README/1775005577414.png)
 
-In simple terms, Revue uses AI like a smart editor and matcher.
+## What This Repo Runs
 
-- It reads the resume and the job postings together.
-- It pulls out the important skills, tools, and requirements.
-- It figures out which skills match and which ones seem to be missing.
-- It writes the plain-language summary and improvement suggestions you see in the report.
+- Frontend: Next.js
+- Backend: FastAPI
+- Database: PostgreSQL (Docker)
+- Pipeline: Airflow (Docker, LocalExecutor)
 
-The AI is not making a hiring decision. It is helping organize the information and explain the fit more clearly.
+This setup is localhost-first. Cloud hosting config has been removed from the main dev flow.
 
-If the AI step is unavailable, Revue still works. It falls back to a simpler rules-based comparison that checks keyword overlap between the resume and the job postings.
+## How It Works (High Level)
 
-## General Workflow
+At a high level, the app has five working parts:
 
-1. The user pastes one or more job postings.
-2. Revue saves those postings and creates a job ID.
-3. The user uploads a resume PDF.
-4. Revue extracts the text from the resume and cleans the text from both sides.
-5. Revue compares the resume against the job postings.
-6. Revue optionally uses AI to improve the skill matching and write the summary.
-7. Revue calculates similarity scores and builds the final report.
-8. The report is saved and shown in the app.
-
-## System Flow
-
-```mermaid
-flowchart TD
-		U[User Browser]
-		FE[Frontend Next.js]
-		BE[Backend FastAPI]
-		DB[(PostgreSQL)]
-		AF[Airflow DAG revue_processing_pipeline]
-		GM[Gemini 2.0 Flash]
-
-		U --> FE
-		FE -->|POST /api/job-postings| BE
-		FE -->|POST /api/resume/upload| BE
-		FE -->|POST /api/resume/trigger| BE
-		FE -->|GET /api/report/:job_id/status| BE
-		FE -->|GET /api/report/:job_id/content| BE
-
-		BE --> DB
-		BE -->|Trigger DAG run with job_id| AF
-
-		AF -->|read postings + resume + write report_json| DB
-		AF -->|LLM analysis prompt| GM
-		GM -->|structured JSON response| AF
-```
-
-## File Communication Map
+- Frontend (Next.js): collects job postings and resume upload, then polls for report status.
+- Backend API (FastAPI): handles auth, stores data in Postgres, and triggers Airflow runs.
+- PostgreSQL: stores users, job postings, resume file data, and generated reports.
+- Airflow pipeline: processes one job_id through extraction, comparison, and report generation.
+- Optional LLM (Gemini): improves skill extraction and narrative output when a key is provided.
 
 ```mermaid
 flowchart LR
-		subgraph Frontend
-			JPP[src/pages/JobPostingsPage.tsx]
-			RUP[src/pages/ResumeUploadPage.tsx]
-			PRP[src/pages/ProcessingPage.tsx]
-			REP[src/pages/ReportPage.tsx]
-			API[src/utils/api.ts]
-		end
+	U[User Browser]
+	FE[Frontend Next.js]
+	BE[Backend FastAPI]
+	DB[(PostgreSQL)]
+	AF[Airflow Pipeline]
+	LLM[Gemini Optional]
 
-		subgraph Backend
-			MAIN[backend/api/main.py]
-			JR[backend/api/routes/job_postings.py]
-			RR[backend/api/routes/resume.py]
-			RPR[backend/api/routes/report.py]
-			DBS[backend/api/services/database.py]
-			ATS[backend/api/services/airflow_trigger.py]
-		end
-
-		subgraph Airflow
-			DAG[airflow/dags/revue_pipeline.py]
-			T1[airflow/tasks/compare_resume.py]
-			T2[airflow/tasks/llm_analysis.py]
-			T3[airflow/tasks/generate_report.py]
-			T4[airflow/tasks/store_output.py]
-		end
-
-		JPP --> API
-		RUP --> API
-		PRP --> API
-		REP --> API
-
-		API --> JR
-		API --> RR
-		API --> RPR
-
-		MAIN --> JR
-		MAIN --> RR
-		MAIN --> RPR
-
-		JR --> DBS
-		RR --> DBS
-		RPR --> DBS
-		RR --> ATS
-		ATS --> DAG
-
-		DAG --> T1 --> T2 --> T3 --> T4
-		T4 --> DBS
+	U --> FE
+	FE -->|API requests| BE
+	BE -->|read/write| DB
+	BE -->|trigger by job_id| AF
+	AF -->|read input + write report| DB
+	AF -->|optional analysis| LLM
+	FE -->|poll report status/content| BE
 ```
 
-## Pipeline Stages (Current)
+In short: frontend submits data, backend stores and triggers work, Airflow builds the report, and frontend displays the final result.
 
-```mermaid
-flowchart LR
-		A[extract_resume_text_step]
-		B[build_initial_payload]
-		C[clean_step]
-		D[resume_features_step]
-		E[compare_step - heuristic overlap]
-		F[llm_analysis_step - Gemini skills + narrative]
-		G[embeddings_step - hashed vector similarity]
-		H[report_step - assemble report_json]
-		I[store_step - persist report]
+## Quick Start
 
-		A --> B --> C --> D --> E --> F --> G --> H --> I
-```
-
-`llm_analysis_step` is fallback-safe. If `GEMINI_API_KEY` is not set (or `google-genai` is unavailable), the pipeline continues with heuristic comparison output.
-
-## Report JSON Shape
-
-```mermaid
-flowchart TD
-		R[report_json]
-		R --> S[summary: match_score, embedding_similarity, fit_label]
-		R --> H[highlights: matched/missing/resume/posting keywords, tools, domains]
-		R --> N[narrative: overview, strengths_summary, gaps_summary, level hints]
-		R --> C[recommendations]
-```
-
-## Repository Layout
-
-```text
-revue/
-├── frontend/
-│   └── src/
-│       ├── pages/
-│       ├── components/
-│       ├── context/
-│       ├── styles/
-│       └── utils/
-├── backend/
-│   ├── api/
-│   │   ├── main.py
-│   │   ├── routes/
-│   │   ├── schemas/
-│   │   └── services/
-│   └── migrations/
-├── airflow/
-│   ├── dags/
-│   └── tasks/
-├── vector_db/
-├── infra/
-│   ├── docker-compose.yml
-│   └── terraform/
-├── Makefile
-└── README.md
-```
-
-## Local Development
-
-Start services from the repo root:
+From the repo root:
 
 ```bash
 make db-up
@@ -175,28 +54,88 @@ make backend-dev
 make frontend-dev
 ```
 
-Useful defaults:
+Open:
 
-- Frontend: `http://localhost:3101`
-- Backend: `http://127.0.0.1:8011`
-- Backend docs: `http://127.0.0.1:8011/docs`
-- Database: `localhost:5434`
+- Frontend: http://localhost:3101
+- Backend: http://127.0.0.1:8011
+- API docs: http://127.0.0.1:8011/docs
+- Airflow UI: http://localhost:8080
 
-Install/update Airflow Python dependencies (after `airflow/requirements.txt` changes):
+## Restart Commands
+
+If frontend and backend are down, run each in its own terminal.
+
+Backend:
 
 ```bash
-docker compose -f infra/docker-compose.yml build airflow
-docker compose -f infra/docker-compose.yml up -d airflow
+cd backend
+source ../.env
+python -m uvicorn api.main:create_app --reload --port 8011
 ```
 
-To enable LLM analysis in pipeline runs:
+Frontend:
+
+```bash
+cd frontend
+npm run dev -- --port 3101
+```
+
+## Common Fixes
+
+### Port 8011 already in use
+
+```bash
+pkill -f "uvicorn api.main:create_app" || true
+lsof -ti tcp:8011 | xargs kill -9 2>/dev/null || true
+```
+
+Then start backend again.
+
+### Missing Python dependency (example: dotenv)
+
+```bash
+cd backend
+pip install -r requirements.txt
+```
+
+### CORS error from LAN IP (for example 192.168.x.x)
+
+Backend CORS now accepts localhost and local-network origins used during device testing.
+
+### Pipeline stuck at 20%
+
+Use the Docker Airflow stack with bind-mounted DAG and task folders so code updates are live:
+
+```bash
+docker compose -f infra/docker-compose.yml --env-file .env up -d airflow-scheduler airflow-webserver
+```
+
+If dependencies changed:
+
+```bash
+docker compose -f infra/docker-compose.yml --env-file .env build
+docker compose -f infra/docker-compose.yml --env-file .env up -d
+```
+
+## Optional LLM Mode
+
+The pipeline works without an LLM key using heuristic matching.
+
+To enable Gemini-enhanced analysis:
 
 ```bash
 export GEMINI_API_KEY=your_key_here
 ```
 
-## Notes
+## Project Structure
 
-- Frontend report download now uses a clean print document generated from `buildPreviewHtml` in `ReportPage.tsx`.
-- `compare_step` still provides deterministic baseline behavior.
-- `llm_analysis_step` upgrades extracted skills and narrative quality when available.
+```text
+revue/
+├── frontend/
+├── backend/
+├── airflow/
+├── infra/
+├── vector_db/
+├── Makefile
+└── README.md
+```
